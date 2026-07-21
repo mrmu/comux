@@ -69,7 +69,7 @@ nginx-proxy-automation 透過 socat 容器的 `VIRTUAL_HOST` 自動簽 Let's Enc
 | 用途 | 網址 | SSH |
 |------|------|-----|
 | 個人專案 | https://comux.audilu.com | `devops@linode-audi-inv` (Tailscale，需要時 `sudo su` 切 root) |
-| 泛科專案 | — | 尚未完成設定 |
+| 泛科專案 | https://comux.pangogo.com | `devops_bot@lobster-9527` (Tailscale；comux 裝在 `/home/devops_bot/comux`，systemd `comux.service`，重啟需 `root@lobster-9527`) |
 
 ## Commands
 

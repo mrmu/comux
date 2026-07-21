@@ -217,4 +217,11 @@ devops@linode-audi-inv
 
 ## 泛科專案正式機
 
-尚未完成設定
+網址: https://comux.pangogo.com（機器：`lobster-9527`，tag:pan-devops）
+
+```
+ssh devops_bot@lobster-9527   # comux 跑在 /home/devops_bot/comux (systemd: comux.service)
+ssh root@lobster-9527         # systemctl restart comux 需要 root
+```
+
+DB 容器名為 `webmux-db-1`（歷史命名），psql 帳號/DB 皆為 `comux`。
