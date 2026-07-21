@@ -215,7 +215,10 @@ export default function MachinesPage() {
                       {m.os}{m.tailscale_ip ? ` · ${m.tailscale_ip}` : ""}
                     </span>
                     <span className="machine-actions">
-                      {!m.is_self && (
+                      {/* 沒設 SSH 使用者前先不給測 — ssh 會用 comux 主機的執行
+                          身分（如 devops_bot）連過去，目的機器多半沒這個帳號，
+                          測了必失敗。設定完成按鈕才出現。 */}
+                      {!m.is_self && m.ssh_user && (
                         <button className="btn-sm" onClick={() => ping(m.id)} disabled={pingBusy === m.id}>
                           {pingBusy === m.id ? "測試中..." : "測試連線"}
                         </button>
@@ -230,9 +233,15 @@ export default function MachinesPage() {
                       )}
                     </span>
                   </div>
-                  {(m.ssh_user || m.note) && editingId !== m.id && (
+                  {editingId !== m.id && (m.ssh_user || m.note || !m.is_self) && (
                     <div className="machine-sub">
-                      {m.ssh_user && <code>ssh {m.ssh_user}@{m.hostname}</code>}
+                      {m.ssh_user ? (
+                        <code>ssh {m.ssh_user}@{m.hostname}</code>
+                      ) : !m.is_self ? (
+                        <span className="machine-note">
+                          尚未設定 SSH 使用者（該機器上實際存在的帳號）— 按「編輯」設定後才能測試連線
+                        </span>
+                      ) : null}
                       {m.note && <span className="machine-note">{m.note}</span>}
                     </div>
                   )}
