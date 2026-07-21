@@ -76,6 +76,36 @@ export async function POST(
     }
   }
 
+  // If the pane is already running something (typically the previous agent
+  // instance), the launch command would be typed INTO that program instead
+  // of the shell — the classic way to end up with a flag-less `claude`
+  // after a "restart". Exit it first and wait for the shell to come back.
+  let paneCmd = await tmux.getPaneCommand(name);
+  if (!SHELL_COMMANDS.has(paneCmd)) {
+    // Escape clears any half-typed input; Ctrl-C twice exits claude's REPL
+    // (and interrupts/exits most CLIs). Re-send while waiting in case the
+    // first pair only interrupted a running task.
+    await tmux.sendSpecialKey(name, "Escape").catch(() => {});
+    await sleep(150);
+    for (let attempt = 0; attempt < 3 && !SHELL_COMMANDS.has(paneCmd); attempt++) {
+      await tmux.sendSpecialKey(name, "C-c").catch(() => {});
+      await sleep(350);
+      await tmux.sendSpecialKey(name, "C-c").catch(() => {});
+      const deadline = Date.now() + 2500;
+      while (Date.now() < deadline) {
+        await sleep(400);
+        paneCmd = await tmux.getPaneCommand(name);
+        if (SHELL_COMMANDS.has(paneCmd)) break;
+      }
+    }
+    if (!SHELL_COMMANDS.has(paneCmd)) {
+      return NextResponse.json(
+        { error: `終端機裡還有程式在執行（${paneCmd}），自動結束失敗 — 請先在 Terminal 手動結束它，再按重啟。` },
+        { status: 409 }
+      );
+    }
+  }
+
   const launchCmd = [binary, ...args].join(" ");
   try {
     await tmux.sendKeys(name, launchCmd);
@@ -100,6 +130,13 @@ export async function POST(
   const ready = agentId === "claude" ? await waitForClaudeReady(name) : true;
 
   return NextResponse.json({ ok: true, agent: agentId, ready });
+}
+
+/** pane_current_command values that mean "just a shell, safe to type into". */
+const SHELL_COMMANDS = new Set(["bash", "zsh", "sh", "fish", "dash", "ksh", "tcsh", "login", ""]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 const TRUST_PROMPT_RE = /trust this folder|Do you trust|Quick safety check/i;
