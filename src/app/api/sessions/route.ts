@@ -15,7 +15,9 @@ export async function GET(request: NextRequest) {
   const liveNames = new Set(liveSessions.map((s) => s.name));
 
   // Get all projects from DB
-  const projects = await prisma.project.findMany({ include: { hosts: true } });
+  const projects = await prisma.project.findMany({
+    include: { hosts: { include: { machine: true } } },
+  });
 
   // Each project's live tmux state is overlaid (running flag, dimensions,
   // activity). tmux sessions without a matching DB project are NOT
@@ -44,6 +46,8 @@ export async function GET(request: NextRequest) {
         ssh_target: h.sshTarget,
         env: h.env,
         description: h.description,
+        path: h.path,
+        machine: h.machine?.hostname || null,
       })),
     };
   });

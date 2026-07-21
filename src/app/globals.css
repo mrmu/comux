@@ -2341,3 +2341,45 @@ select {
   font-size: 0.72rem;
   text-align: center;
 }
+
+/* ─── Projects toolbar: search + machine chips ───────────────────── */
+.project-toolbar {
+  padding: 0.6rem 0.75rem 0.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.project-search {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 0.9rem;
+  outline: none;
+}
+.project-search:focus { border-color: var(--accent); }
+.machine-chips {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+.machine-chip {
+  flex-shrink: 0;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+}
+.machine-chip.active {
+  background: rgba(99,102,241,0.18);
+  border-color: var(--accent);
+  color: var(--text);
+}
