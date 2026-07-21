@@ -45,7 +45,10 @@ export async function POST(
   } catch (e) {
     const stderr = ((e as { stderr?: string }).stderr || (e as Error).message).trim();
     let hint = "";
-    if (/Permission denied/i.test(stderr)) {
+    if (/failed to look up local user "([^"]+)"/i.test(stderr)) {
+      const missing = stderr.match(/failed to look up local user "([^"]+)"/i)?.[1];
+      hint = `目的機器上沒有使用者「${missing}」${machine.sshUser ? "" : "（未設定 SSH 使用者時會用 comux 主機的執行身分）"} — 按「編輯」把 SSH 使用者改成該機器上實際存在的帳號。`;
+    } else if (/Permission denied/i.test(stderr)) {
       hint = "連得到但認證失敗 — 確認 Tailscale SSH 已啟用，或把主開發機公鑰加到該機器。";
     } else if (/Could not resolve|Name or service not known/i.test(stderr)) {
       hint = "解析不到主機名稱 — 確認這台機器在 tailnet 上且 MagicDNS 開啟。";
