@@ -229,11 +229,11 @@ export function parseJsonlMessages(
   try {
     // Read only the tail of large files for performance
     const stat = fs.statSync(filePath);
-    if (stat.size > 500_000) {
-      // Read last 500KB — enough for recent conversation
-      const buf = Buffer.alloc(500_000);
+    const TAIL_BYTES = 5_000_000; // 5MB — tool-heavy sessions can have huge entries
+    if (stat.size > TAIL_BYTES) {
+      const buf = Buffer.alloc(TAIL_BYTES);
       const fd = fs.openSync(filePath, "r");
-      fs.readSync(fd, buf, 0, 500_000, stat.size - 500_000);
+      fs.readSync(fd, buf, 0, TAIL_BYTES, stat.size - TAIL_BYTES);
       fs.closeSync(fd);
       data = buf.toString("utf-8");
       // Skip first partial line

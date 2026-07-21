@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
+import path from "path";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isValidCwd } from "@/lib/validate";
@@ -45,25 +46,22 @@ export async function POST(
   // Refuse to clone over an existing non-empty directory — the user might
   // already have work in there. They can resolve manually (rm or move) and
   // try again.
-  let exists = false;
   try {
     const entries = await fs.readdir(project.cwd);
-    exists = true;
-    if (entries.length > 0) {
+    // Ignore `.comux` — comux may have synced it before clone
+    const meaningful = entries.filter((e) => e !== ".comux");
+    if (meaningful.length > 0) {
       return NextResponse.json(
         { error: "Working directory exists and is not empty — refusing to clone over it" },
         { status: 409 }
       );
     }
+    // Only `.comux` (or empty) — clean up so git clone can proceed
+    const comuxPath = path.join(project.cwd, ".comux");
+    try { await fs.rm(comuxPath, { recursive: true }); } catch { /* ignore */ }
+    try { await fs.rmdir(project.cwd); } catch { /* ignore */ }
   } catch {
     // ENOENT — git clone will create it
-  }
-
-  // If the directory exists but is empty, remove it so `git clone` can
-  // create it cleanly (git refuses to clone into an existing path even if
-  // empty in some versions).
-  if (exists) {
-    try { await fs.rmdir(project.cwd); } catch { /* race / non-empty — gitClone will surface error */ }
   }
 
   const result = await gitClone(project.repoUrl, project.cwd);

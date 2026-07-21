@@ -445,6 +445,10 @@ export default function ProjectSettings({
   };
 
   const cloneRepo = async () => {
+    // If the cwd exists with only .comux (isEmpty per our check), warn the user
+    if (gitStatus?.cwdExists && gitStatus?.isEmpty) {
+      if (!confirm("現有 .comux 目錄會被清除並由 repo 內容取代，繼續嗎？")) return;
+    }
     setCloneBusy(true);
     setCloneError("");
     try {

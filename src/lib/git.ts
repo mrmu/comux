@@ -40,7 +40,10 @@ export async function inspectCwd(
   if (!status.isDirectory) return status;
 
   const entries = await fs.readdir(cwd).catch(() => [] as string[]);
-  status.isEmpty = entries.length === 0;
+  // Ignore `.comux` when deciding emptiness — comux may have synced it
+  // before the repo is cloned, and it shouldn't block the clone button.
+  const meaningful = entries.filter((e) => e !== ".comux");
+  status.isEmpty = meaningful.length === 0;
   status.isGitRepo = entries.includes(".git");
 
   if (status.isGitRepo) {
