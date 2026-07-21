@@ -71,6 +71,10 @@ function WorkspacePageContent({
   // gemini). Drives Chat-tab visibility and which transcript adapter the
   // chat view will use. null until the user clicks a launch button.
   const [agent, setAgent] = useState<string | null>(null);
+  // Live state: is the agent process actually running in the pane right
+  // now? Drives which tab we land on — `agent` alone stays set in the DB
+  // across session restarts, when Chat can't do anything yet.
+  const [agentRunning, setAgentRunning] = useState(false);
 
   // Track which project we last loaded so we can tell "first mount" apart
   // from "user switched tabs". On a switch we override activeView to the
@@ -84,7 +88,7 @@ function WorkspacePageContent({
       prevProjectName.current !== null && prevProjectName.current !== projectName;
     prevProjectName.current = projectName;
     (async () => {
-      let proj: { agent?: string | null } | null = null;
+      let proj: { agent?: string | null; agent_running?: boolean } | null = null;
       try {
         proj = await api.get(`/api/projects/${projectName}`);
       } catch {
@@ -94,9 +98,11 @@ function WorkspacePageContent({
       if (cancelled) return;
       setProjectReady(true);
       const newAgent = proj?.agent || null;
+      const newAgentRunning = !!proj?.agent_running;
       setAgent(newAgent);
+      setAgentRunning(newAgentRunning);
       if (isSwitch) {
-        const target = newAgent ? "chat" : "terminal";
+        const target = newAgent && newAgentRunning ? "chat" : "terminal";
         setActiveView(target);
         router.replace(`/projects/${projectName}?tab=${target}`, { scroll: false });
       }
@@ -105,13 +111,19 @@ function WorkspacePageContent({
     return () => { cancelled = true; };
   }, [projectName, router]);
 
-  // Force Chat → Terminal when the project has no agent yet, so the
-  // initialTab="chat" default doesn't land on a hidden tab. Gated on
-  // projectReady so the *initial* null-agent state during the first
-  // fetch doesn't prematurely flip a chat-default project to terminal.
+  // Land on Terminal when the agent isn't actually running — Chat can't do
+  // anything until the CLI is up (the DB `agent` field survives session
+  // restarts, so it alone can't make this call). Forced at most once per
+  // project entry so the user can still open Chat manually to read the
+  // transcript while the agent is stopped.
+  const forcedViewFor = useRef<string | null>(null);
   useEffect(() => {
-    if (projectReady && !agent && activeView === "chat") setActiveView("terminal");
-  }, [projectReady, agent, activeView]);
+    if (forcedViewFor.current === projectName) return;
+    if (projectReady && !agentRunning && activeView === "chat") {
+      forcedViewFor.current = projectName;
+      setActiveView("terminal");
+    }
+  }, [projectReady, agentRunning, activeView, projectName]);
 
   // Make sure the current project is in the open-tabs list; once the
   // sessions list has loaded, also drop any stale names (deleted
@@ -362,7 +374,11 @@ function WorkspacePageContent({
             key={projectName}
             sessionName={projectName}
             agent={agent}
-            onAgentLaunched={(a, ready) => { setAgent(a); if (ready) switchView("chat"); }}
+            onAgentLaunched={(a, ready) => {
+              setAgent(a);
+              setAgentRunning(ready);
+              if (ready) switchView("chat");
+            }}
           />
         </div>
 

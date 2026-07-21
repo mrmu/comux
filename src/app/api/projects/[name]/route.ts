@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import * as tmux from "@/lib/tmux";
 import { isValidCwd, isValidCommand } from "@/lib/validate";
 import { getAllowedCwdRoots } from "@/lib/settings";
 import { syncComuxDir } from "@/lib/sync-comux-dir";
+
+/** pane_current_command values that mean "nothing but a shell is running". */
+const SHELL_COMMANDS = new Set(["bash", "zsh", "sh", "fish", "dash", "ksh", "tcsh", "login", ""]);
 
 export async function GET(
   request: NextRequest,
@@ -20,12 +24,25 @@ export async function GET(
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
+
+  // `agent` records which agent this project uses (drives Chat-tab
+  // visibility / transcript adapter); `agent_running` is the live state —
+  // whether the tmux pane is actually running something beyond a shell.
+  // After a session restart agent stays set but agent_running is false, so
+  // the UI lands on Terminal until the agent is (re)launched.
+  let agentRunning = false;
+  if (project.agent) {
+    const cmd = await tmux.getPaneCommand(name);
+    agentRunning = !SHELL_COMMANDS.has(cmd);
+  }
+
   return NextResponse.json({
     name: project.name,
     display_name: project.displayName,
     color: project.color,
     cwd: project.cwd,
     agent: project.agent,
+    agent_running: agentRunning,
   });
 }
 
