@@ -275,6 +275,41 @@ export default function TerminalView({
         return true;
       });
 
+      // Touch scrolling: xterm.js doesn't translate touch drags into
+      // anything tmux can see (its own viewport has no history — tmux owns
+      // the scrollback). Convert vertical drags into SGR mouse-wheel
+      // sequences sent straight to tmux — the exact bytes a desktop wheel
+      // produces, so behaviour matches: swipe scrolls tmux copy-mode.
+      const touchEl = containerRef.current;
+      let touchLastY: number | null = null;
+      let touchAcc = 0;
+      const WHEEL_STEP_PX = 18; // one wheel tick per this many pixels
+      const onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 1) { touchLastY = e.touches[0].clientY; touchAcc = 0; }
+        else touchLastY = null; // pinch etc. — leave it alone
+      };
+      const onTouchMove = (e: TouchEvent) => {
+        if (touchLastY === null || e.touches.length !== 1) return;
+        const y = e.touches[0].clientY;
+        touchAcc += touchLastY - y;
+        touchLastY = y;
+        e.preventDefault(); // keep the page from rubber-banding
+        while (Math.abs(touchAcc) >= WHEEL_STEP_PX) {
+          // finger up (acc>0) = reveal later content = wheel down (65)
+          const code = touchAcc > 0 ? 65 : 64;
+          touchAcc += touchAcc > 0 ? -WHEEL_STEP_PX : WHEEL_STEP_PX;
+          if (ws && ws.readyState === WebSocket.OPEN && terminal) {
+            const col = Math.max(1, Math.ceil(terminal.cols / 2));
+            const row = Math.max(1, Math.ceil(terminal.rows / 2));
+            ws.send(JSON.stringify({ type: "input", data: `\x1b[<${code};${col};${row}M` }));
+          }
+        }
+      };
+      const onTouchEnd = () => { touchLastY = null; };
+      touchEl.addEventListener("touchstart", onTouchStart, { passive: true });
+      touchEl.addEventListener("touchmove", onTouchMove, { passive: false });
+      touchEl.addEventListener("touchend", onTouchEnd, { passive: true });
+
       const resizeObserver = new ResizeObserver(() => {
         fitAddon?.fit();
         if (ws && ws.readyState === WebSocket.OPEN && terminal) {
@@ -314,6 +349,9 @@ export default function TerminalView({
 
       cleanupRef.current = () => {
         document.removeEventListener("visibilitychange", onVisibility);
+        touchEl.removeEventListener("touchstart", onTouchStart);
+        touchEl.removeEventListener("touchmove", onTouchMove);
+        touchEl.removeEventListener("touchend", onTouchEnd);
         resizeObserver.disconnect();
         intersectionObserver.disconnect();
         if (pingTimer) clearInterval(pingTimer);
