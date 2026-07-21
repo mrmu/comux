@@ -200,6 +200,9 @@ export default function TerminalView({
           "'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace",
         cursorBlink: true,
         scrollback: 10000,
+        // Unicode11Addon is a "proposed API" consumer — without this flag
+        // xterm throws during init and the terminal never renders at all.
+        allowProposedApi: true,
       });
 
       fitAddon = new FitAddon();
