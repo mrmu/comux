@@ -298,6 +298,10 @@ export default function ProjectSettings({
   // Chat sessions
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
 
+  // tmux session restart
+  const [restartBusy, setRestartBusy] = useState(false);
+  const [restartMsg, setRestartMsg] = useState("");
+
   // Git status (cwd state, remote match)
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [cloneBusy, setCloneBusy] = useState(false);
@@ -553,6 +557,26 @@ export default function ProjectSettings({
     }
     if (h.ssh_target === "localhost" || h.ssh_target === "127.0.0.1") return "本機";
     return h.ssh_target ? `ssh ${h.ssh_target}` : "（未設定）";
+  };
+
+  const restartSession = async () => {
+    if (!confirm("重啟 tmux session？終端機裡執行中的程式（含 AI agent）會被結束，專案資料不受影響。")) return;
+    setRestartBusy(true);
+    setRestartMsg("");
+    try {
+      // keep=true: kill tmux only, keep the DB project row
+      await api.del(`/api/sessions/${projectName}?keep=true`);
+      await api.post("/api/sessions", {
+        name: projectName,
+        display_name: displayName || projectName,
+        cwd: cwd || null,
+        color,
+      });
+      setRestartMsg("已重啟 — 切回 Terminal 分頁即可使用（shell 已在最新的工作目錄）");
+    } catch (e) {
+      setRestartMsg("重啟失敗：" + humanizeHostError(e instanceof Error ? e.message : String(e)));
+    }
+    setRestartBusy(false);
   };
 
   const selectChatSession = async (sessionId: string) => {
@@ -1219,6 +1243,26 @@ export default function ProjectSettings({
             </div>
           </section>
         )}
+
+        {/* tmux session lifecycle — restart picks up cwd changes */}
+        <section className="settings-section">
+          <h3>Terminal Session</h3>
+          <p className="settings-hint">
+            重啟會結束目前的 tmux session 再用最新設定開一個新的 —
+            改過工作目錄後要重啟，shell 才會落在新目錄。
+            專案資料（hosts、notes、chat 紀錄）完全不受影響。
+          </p>
+          <button
+            className="btn-sm"
+            onClick={restartSession}
+            disabled={restartBusy}
+          >
+            {restartBusy ? "重啟中..." : "重啟 session"}
+          </button>
+          {restartMsg && (
+            <p className={restartMsg.startsWith("重啟失敗") ? "msg-err" : "msg-ok"}>{restartMsg}</p>
+          )}
+        </section>
 
         {/* Danger Zone */}
         <section className="settings-section danger-zone">
