@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { syncMachinesFromTailscale, getSelfMachine } from "@/lib/machines";
+import { importMachines, listMachines } from "@/lib/machines";
+import { isValidHostname } from "@/lib/validate";
 
+/** Opt-in import of tailnet machines the user selected from the discover
+ *  list. Only hostnames actually present in the live tailnet get created. */
 export async function POST(request: NextRequest) {
   if (!requireAuth(request))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const body = await request.json();
+  const hostnames: string[] = Array.isArray(body.hostnames) ? body.hostnames : [];
+  if (hostnames.length === 0) {
+    return NextResponse.json({ error: "hostnames is required" }, { status: 400 });
+  }
+  if (!hostnames.every((h) => typeof h === "string" && isValidHostname(h))) {
+    return NextResponse.json({ error: "hostname 格式不正確" }, { status: 400 });
+  }
+
   try {
-    const { machines, discovered } = await syncMachinesFromTailscale();
-    const self = await getSelfMachine();
+    const imported = await importMachines(hostnames);
+    const machines = await listMachines();
     return NextResponse.json({
       ok: true,
-      self,
-      // Live tailnet nodes NOT in the registry — shown to the user for
-      // opt-in import, never persisted here.
-      discovered: discovered.map((d) => ({
-        hostname: d.hostname,
-        os: d.os,
-        online: d.online,
-        tailscale_ip: d.ip,
-      })),
+      imported,
       machines: machines.map((m) => ({
         id: m.id,
         hostname: m.hostname,

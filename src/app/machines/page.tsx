@@ -21,6 +21,13 @@ interface Machine {
   last_seen_at: string | null;
 }
 
+interface DiscoveredNode {
+  hostname: string;
+  os: string;
+  online: boolean;
+  tailscale_ip: string;
+}
+
 export default function MachinesPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -32,6 +39,11 @@ export default function MachinesPage() {
   const [pingBusy, setPingBusy] = useState<number | null>(null);
   const [manual, setManual] = useState({ hostname: "", ssh_user: "" });
   const [manualMsg, setManualMsg] = useState("");
+  // Live tailnet nodes not yet in the registry — opt-in import only, so a
+  // shared tailnet doesn't leak unrelated machines into this instance's DB.
+  const [discovered, setDiscovered] = useState<DiscoveredNode[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [importBusy, setImportBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -49,9 +61,14 @@ export default function MachinesPage() {
     try {
       const data = await api.post("/api/machines/sync", {});
       setMachines(data.machines);
+      setDiscovered(data.discovered || []);
+      setSelected(new Set());
       // Self may have changed — refresh the badge cache
       sessionStorage.removeItem("comux-self-machine");
-      setSyncMsg(`已同步 ${data.machines.length} 台機器`);
+      setSyncMsg(
+        `已更新 ${data.machines.length} 台已納管站點` +
+        (data.discovered?.length ? `，另發現 ${data.discovered.length} 台未納管（見下方清單）` : "")
+      );
     } catch (err) {
       let msg = (err as Error).message;
       try { msg = JSON.parse(msg).error; } catch { /* raw */ }
@@ -100,6 +117,31 @@ export default function MachinesPage() {
     }
   };
 
+  const toggleSelect = (hostname: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(hostname)) next.delete(hostname);
+      else next.add(hostname);
+      return next;
+    });
+  };
+
+  const importSelected = async () => {
+    if (selected.size === 0) return;
+    setImportBusy(true);
+    try {
+      const data = await api.post("/api/machines/import", { hostnames: [...selected] });
+      setMachines(data.machines);
+      setDiscovered((prev) => prev.filter((d) => !selected.has(d.hostname)));
+      setSelected(new Set());
+    } catch (err) {
+      let msg = (err as Error).message;
+      try { msg = JSON.parse(msg).error; } catch { /* raw */ }
+      alert(msg);
+    }
+    setImportBusy(false);
+  };
+
   const addManual = async () => {
     if (!manual.hostname) return;
     setManualMsg("");
@@ -131,8 +173,10 @@ export default function MachinesPage() {
             </button>
           </h3>
           <p className="settings-hint">
-            站點清單來自主開發機的 <code>tailscale status</code>。同步後即可在各專案的
-            「部署主機」用下拉選單指定站點＋路徑，寫入 <code>.comux/hosts.md</code> 給 AI agent。
+            同步只會<strong>更新已納管站點</strong>的狀態；tailnet 上其他機器會列在下方
+            「發現的站點」等你勾選加入，不會自動進資料庫 —
+            共用 tailnet 時，這台 comux 只納管和它相關的機器即可（例如公司 comux 不必、也不該加入個人站點）。
+            納管後就能在各專案的「部署主機」下拉選單指定站點＋路徑。
           </p>
           {syncMsg && (
             <p className={syncMsg.startsWith("同步失敗") ? "msg-err" : "msg-ok"}>{syncMsg}</p>
@@ -140,7 +184,7 @@ export default function MachinesPage() {
 
           {!loaded ? null : machines.length === 0 ? (
             <div className="empty-state">
-              <p>尚無站點 — 按「從 Tailscale 同步」匯入這台主開發機所在 tailnet 的所有機器。</p>
+              <p>尚無納管站點 — 按「從 Tailscale 同步」，再從發現清單勾選要納管的機器。</p>
             </div>
           ) : (
             <div className="machine-list">
@@ -201,6 +245,39 @@ export default function MachinesPage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {discovered.length > 0 && (
+            <div className="machine-discovered">
+              <h4>發現的站點（未納管）</h4>
+              <p className="settings-hint">
+                勾選這台 comux 需要管理的機器再按「納管選取站點」；其餘的不會被儲存。
+              </p>
+              <div className="machine-list">
+                {discovered.map((d) => (
+                  <label key={d.hostname} className="machine-item machine-discover-item">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(d.hostname)}
+                      onChange={() => toggleSelect(d.hostname)}
+                    />
+                    <span className={`machine-dot${d.online ? " online" : ""}`} />
+                    <span className="machine-hostname">{d.hostname}</span>
+                    <span className="machine-meta">
+                      {d.os}{d.tailscale_ip ? ` · ${d.tailscale_ip}` : ""}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <button
+                className="btn-sm"
+                style={{ marginTop: "0.5rem" }}
+                onClick={importSelected}
+                disabled={importBusy || selected.size === 0}
+              >
+                {importBusy ? "納管中..." : `納管選取站點（${selected.size}）`}
+              </button>
             </div>
           )}
         </section>

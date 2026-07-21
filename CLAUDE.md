@@ -115,7 +115,7 @@ docs/deploy/        # Deployment guide
 - **User**: email (unique), password (bcrypt), name
 - **Setting**: key-value store (projectsRoot, etc.)
 - **Project**: name, displayName, color, cwd, command, jsonlSessionId
-- **Machine**: Tailscale 站點註冊表 — hostname (MagicDNS label, unique), sshUser, online, isSelf (comux 主開發機), source (tailscale/manual)；由 `tailscale status --json` 同步
+- **Machine**: Tailscale 站點註冊表 — hostname (MagicDNS label, unique), sshUser, online, isSelf (comux 主開發機), source (tailscale/manual)。同步 (`tailscale status --json`) 只更新已納管站點＋self；tailnet 其他機器需在 Machines 頁勾選「納管」才會入庫（共用 tailnet 時避免公司 comux 看見個人站點）
 - **Host**: projectName → machineId (FK → Machine) + path (該站點上的專案目錄) + deployType (ssh/cloud-run), env (production/staging/development)；sshTarget 為舊制手填欄位，machineId 存在時以 Machine 為準
 - **Note**: sessionName → content (一對多)
 

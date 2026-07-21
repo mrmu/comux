@@ -1,41 +1,55 @@
 import { prisma } from "./db";
-import { getTailscaleNodes, osHostname } from "./tailscale";
+import { getTailscaleNodes, osHostname, type TailscaleNode } from "./tailscale";
 import type { Machine } from "@/generated/prisma/client";
 
-/** Upsert the Machine registry from the live tailnet. Machines that have
- *  disappeared from the tailnet are kept (hosts may still reference them)
- *  but flagged offline; `lastSeenAt` shows how stale they are. */
-export async function syncMachinesFromTailscale(): Promise<Machine[]> {
+function tailscaleFields(n: TailscaleNode, now: Date) {
+  return {
+    displayName: n.displayName,
+    dnsName: n.dnsName,
+    tailscaleIp: n.ip,
+    os: n.os,
+    online: n.online,
+    isSelf: n.isSelf,
+    source: "tailscale",
+    lastSeenAt: now,
+  };
+}
+
+/** Refresh the registry from the live tailnet — WITHOUT importing new
+ *  machines. Only self and already-registered machines are persisted;
+ *  everything else is returned as `discovered` for the user to opt in via
+ *  importMachines(). Deliberate: a shared tailnet may contain machines
+ *  that must never appear in this instance's DB (e.g. personal servers
+ *  visible from a company comux). */
+export async function syncMachinesFromTailscale(): Promise<{
+  machines: Machine[];
+  discovered: TailscaleNode[];
+}> {
   const nodes = await getTailscaleNodes();
   const now = new Date();
-  const seen = new Set<string>();
+  const registered = new Set(
+    (await prisma.machine.findMany({ select: { hostname: true } })).map((m) => m.hostname)
+  );
 
+  const discovered: TailscaleNode[] = [];
+  const seen = new Set<string>();
   for (const n of nodes) {
     seen.add(n.hostname);
-    await prisma.machine.upsert({
-      where: { hostname: n.hostname },
-      update: {
-        displayName: n.displayName,
-        dnsName: n.dnsName,
-        tailscaleIp: n.ip,
-        os: n.os,
-        online: n.online,
-        isSelf: n.isSelf,
-        source: "tailscale",
-        lastSeenAt: now,
-      },
-      create: {
-        hostname: n.hostname,
-        displayName: n.displayName,
-        dnsName: n.dnsName,
-        tailscaleIp: n.ip,
-        os: n.os,
-        online: n.online,
-        isSelf: n.isSelf,
-        source: "tailscale",
-        lastSeenAt: now,
-      },
-    });
+    if (n.isSelf) {
+      // Self is always registered — the badge and hosts.md need it.
+      await prisma.machine.upsert({
+        where: { hostname: n.hostname },
+        update: tailscaleFields(n, now),
+        create: { hostname: n.hostname, ...tailscaleFields(n, now) },
+      });
+    } else if (registered.has(n.hostname)) {
+      await prisma.machine.update({
+        where: { hostname: n.hostname },
+        data: tailscaleFields(n, now),
+      });
+    } else {
+      discovered.push(n);
+    }
   }
 
   // Anything tailscale-sourced but absent from this sync: offline, and no
@@ -45,7 +59,30 @@ export async function syncMachinesFromTailscale(): Promise<Machine[]> {
     data: { online: false, isSelf: false },
   });
 
-  return prisma.machine.findMany({ orderBy: [{ isSelf: "desc" }, { hostname: "asc" }] });
+  const machines = await prisma.machine.findMany({
+    orderBy: [{ isSelf: "desc" }, { hostname: "asc" }],
+  });
+  return { machines, discovered };
+}
+
+/** Opt-in import of discovered tailnet machines, by hostname. Returns how
+ *  many were actually imported (hostnames not visible in the live tailnet
+ *  are ignored — the client list may be stale). */
+export async function importMachines(hostnames: string[]): Promise<number> {
+  const wanted = new Set(hostnames);
+  const nodes = await getTailscaleNodes();
+  const now = new Date();
+  let imported = 0;
+  for (const n of nodes) {
+    if (!wanted.has(n.hostname)) continue;
+    await prisma.machine.upsert({
+      where: { hostname: n.hostname },
+      update: tailscaleFields(n, now),
+      create: { hostname: n.hostname, ...tailscaleFields(n, now) },
+    });
+    imported++;
+  }
+  return imported;
 }
 
 export async function listMachines(): Promise<Machine[]> {

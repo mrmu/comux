@@ -2285,3 +2285,12 @@ select {
 .modal-host-row { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
 .modal-host-row select { flex: 0 0 45%; min-width: 0; }
 .modal-host-row input { flex: 1; min-width: 0; }
+.machine-discovered { margin-top: 1rem; }
+.machine-discovered h4 {
+  font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 0.4rem;
+}
+.machine-discover-item {
+  display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+}
+.machine-discover-item input[type="checkbox"] { accent-color: var(--accent); }
