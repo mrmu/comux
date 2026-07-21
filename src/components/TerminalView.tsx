@@ -213,11 +213,27 @@ export default function TerminalView({
       // GPU renderer — same as VS Code's terminal. Big win for TUI-heavy
       // output (agent spinners redraw constantly). Falls back to the DOM
       // renderer on context loss or unsupported devices.
-      try {
-        const webgl = new WebglAddon();
-        webgl.onContextLoss(() => webgl.dispose());
-        terminal.loadAddon(webgl);
-      } catch { /* no WebGL — DOM renderer is fine */ }
+      //
+      // The parent hides inactive views with display:none, which invalidates
+      // the WebGL canvas — coming back would render pure black. So the addon
+      // is created through loadWebgl() and rebuilt from scratch every time
+      // the container becomes visible again (see IntersectionObserver below).
+      let webgl: InstanceType<typeof WebglAddon> | null = null;
+      const loadWebgl = () => {
+        if (!terminal) return;
+        try { webgl?.dispose(); } catch { /* already gone */ }
+        webgl = null;
+        try {
+          const addon = new WebglAddon();
+          addon.onContextLoss(() => {
+            try { addon.dispose(); } catch { /* ignore */ }
+            if (webgl === addon) webgl = null;
+          });
+          terminal.loadAddon(addon);
+          webgl = addon;
+        } catch { /* no WebGL — DOM renderer is fine */ }
+      };
+      loadWebgl();
       setTimeout(() => fitAddon.fit(), 50);
 
       // Copy-on-select for NATIVE selections (Shift+drag). Plain drag goes
@@ -280,6 +296,9 @@ export default function TerminalView({
         const visible = entries.some((e) => e.isIntersecting);
         if (visible && !wasVisible) {
           fitAddon?.fit();
+          // Rebuild the WebGL renderer — its canvas doesn't survive
+          // display:none; refresh() alone leaves the screen black.
+          loadWebgl();
           if (terminal) terminal.refresh(0, terminal.rows - 1);
         }
         wasVisible = visible;
@@ -300,6 +319,7 @@ export default function TerminalView({
           ws.onclose = null;
           try { ws.close(); } catch { /* ignore */ }
         }
+        try { webgl?.dispose(); } catch { /* ignore */ }
         terminal?.dispose();
       };
     }
