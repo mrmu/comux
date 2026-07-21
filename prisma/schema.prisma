@@ -37,6 +37,7 @@ model Project {
   repoUrl        String   @default("") @map("repo_url")    // GitHub/Bitbucket URL
   repoToken      String   @default("") @map("repo_token")  // PAT for API access
   agent          String?  @map("agent")                    // claude / codex / gemini, null = none launched yet
+  priority       String   @default("medium")               // high / medium / low — user-set list ordering
   // deploy.md / test.md live as files under {cwd}/.comux/.  They are
   // user-owned and version-controlled with the rest of the repo —
   // the DB no longer mirrors them.

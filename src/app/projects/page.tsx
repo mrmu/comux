@@ -22,11 +22,16 @@ interface SessionInfo {
   display_name: string;
   description: string;
   color: string;
+  priority: string; // high / medium / low
   running: boolean;
   cwd: string;
   command: string;
   hosts: HostInfo[];
 }
+
+const PRIORITY_LABEL: Record<string, string> = { high: "高", medium: "中", low: "低" };
+const PRIORITY_NEXT: Record<string, string> = { high: "medium", medium: "low", low: "high" };
+const PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
 // Open-frequency tracking, per browser. {name: {n: count, at: lastOpenMs}}
 const OPENS_KEY = "comux:projectOpens";
@@ -51,7 +56,7 @@ export default function ProjectsPage() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [query, setQuery] = useState("");
-  const [machineFilter, setMachineFilter] = useState<string | null>(null);
+  const [showLow, setShowLow] = useState(false);
   const [opens, setOpens] = useState<Record<string, { n: number; at: number }>>({});
 
   const loadSessions = useCallback(async () => {
@@ -64,23 +69,20 @@ export default function ProjectsPage() {
 
   useEffect(() => { loadSessions(); setOpens(loadOpens()); }, [loadSessions]);
 
-  // Machine filter chips — built from every host's machine (or legacy
-  // ssh_target), so "which box is this on" is one tap away.
-  const machines = useMemo(() => {
-    const set = new Set<string>();
-    for (const s of sessions) {
-      for (const h of s.hosts) set.add(h.machine || h.ssh_target || "");
+  // Tap the badge to cycle 高→中→低. Optimistic — the PUT confirms it.
+  const cyclePriority = async (s: SessionInfo) => {
+    const next = PRIORITY_NEXT[s.priority] || "medium";
+    setSessions((prev) => prev.map((p) => (p.name === s.name ? { ...p, priority: next } : p)));
+    try {
+      await api.put(`/api/projects/${s.name}`, { priority: next });
+    } catch {
+      loadSessions(); // revert to server truth
     }
-    set.delete("");
-    return [...set].sort();
-  }, [sessions]);
+  };
 
-  const visible = useMemo(() => {
+  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const match = (s: SessionInfo) => {
-      if (machineFilter && !s.hosts.some((h) => (h.machine || h.ssh_target) === machineFilter)) {
-        return false;
-      }
       if (!q) return true;
       // Name, display name, and every URL-ish field: project description
       // plus host descriptions (both carry the site URL by convention).
@@ -92,15 +94,23 @@ export default function ProjectsPage() {
       ].join("\n").toLowerCase();
       return hay.includes(q);
     };
-    // Most-opened first, recency breaks ties, then name for stability.
+    // Priority first, then most-opened, recency, name.
     return sessions.filter(match).sort((a, b) => {
+      const pr = (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1);
+      if (pr !== 0) return pr;
       const oa = opens[a.name] || { n: 0, at: 0 };
       const ob = opens[b.name] || { n: 0, at: 0 };
       if (ob.n !== oa.n) return ob.n - oa.n;
       if (ob.at !== oa.at) return ob.at - oa.at;
       return a.name.localeCompare(b.name);
     });
-  }, [sessions, query, machineFilter, opens]);
+  }, [sessions, query, opens]);
+
+  // Low-priority projects stay collapsed — unless the user is searching,
+  // in which case they explicitly want to find things.
+  const searching = query.trim().length > 0;
+  const active = searching ? filtered : filtered.filter((s) => s.priority !== "low");
+  const low = searching ? [] : filtered.filter((s) => s.priority === "low");
 
   const openProject = (s: SessionInfo) => {
     recordOpen(s.name);
@@ -123,6 +133,30 @@ export default function ProjectsPage() {
     }
   };
 
+  const renderCard = (s: SessionInfo) => (
+    <div key={s.name} className="session-card" onClick={() => openProject(s)}>
+      <div className="session-dot" style={{ background: s.color, opacity: s.running ? 1 : 0.4 }}>
+        {s.display_name.charAt(0).toUpperCase()}
+      </div>
+      <div className="session-card-info">
+        <div className="session-card-name">{s.display_name}</div>
+        <div className="session-card-meta">
+          {s.name} &middot; {s.running ? "running" : "stopped"}
+          {s.description && <> &middot; {s.description.replace(/^https?:\/\//, "")}</>}
+          {s.hosts[0]?.machine && <> &middot; {s.hosts[0].machine}</>}
+        </div>
+      </div>
+      <button
+        className={`priority-badge ${s.priority}`}
+        title="點擊切換優先度（高→中→低）"
+        onClick={(e) => { e.stopPropagation(); cyclePriority(s); }}
+      >
+        {PRIORITY_LABEL[s.priority] || "中"}
+      </button>
+      <div className={`session-card-status${s.running ? " active" : ""}`} />
+    </div>
+  );
+
   return (
     <div className="screen">
       <header className="top-bar">
@@ -140,25 +174,6 @@ export default function ProjectsPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {machines.length > 1 && (
-          <div className="machine-chips">
-            <button
-              className={`machine-chip${machineFilter === null ? " active" : ""}`}
-              onClick={() => setMachineFilter(null)}
-            >
-              全部
-            </button>
-            {machines.map((m) => (
-              <button
-                key={m}
-                className={`machine-chip${machineFilter === m ? " active" : ""}`}
-                onClick={() => setMachineFilter(machineFilter === m ? null : m)}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="session-list">
@@ -167,27 +182,22 @@ export default function ProjectsPage() {
             <div className="empty-state-icon">&#x229E;</div>
             <p>No projects yet.<br />Create one to get started.</p>
           </div>
-        ) : visible.length === 0 ? (
+        ) : active.length === 0 && low.length === 0 ? (
           <div className="empty-state">
-            <p>沒有符合「{query || machineFilter}」的專案</p>
+            <p>沒有符合「{query}」的專案</p>
           </div>
         ) : (
-          visible.map((s) => (
-            <div key={s.name} className="session-card" onClick={() => openProject(s)}>
-              <div className="session-dot" style={{ background: s.color, opacity: s.running ? 1 : 0.4 }}>
-                {s.display_name.charAt(0).toUpperCase()}
-              </div>
-              <div className="session-card-info">
-                <div className="session-card-name">{s.display_name}</div>
-                <div className="session-card-meta">
-                  {s.name} &middot; {s.running ? "running" : "stopped"}
-                  {s.description && <> &middot; {s.description.replace(/^https?:\/\//, "")}</>}
-                  {s.hosts[0]?.machine && <> &middot; {s.hosts[0].machine}</>}
-                </div>
-              </div>
-              <div className={`session-card-status${s.running ? " active" : ""}`} />
-            </div>
-          ))
+          <>
+            {active.map(renderCard)}
+            {low.length > 0 && (
+              <>
+                <button className="low-priority-toggle" onClick={() => setShowLow((v) => !v)}>
+                  {showLow ? "▾" : "▸"} 低優先（{low.length}）
+                </button>
+                {showLow && low.map(renderCard)}
+              </>
+            )}
+          </>
         )}
       </div>
       {showModal && (

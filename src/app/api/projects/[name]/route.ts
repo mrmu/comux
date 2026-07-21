@@ -73,6 +73,10 @@ export async function PUT(
     );
   }
 
+  if (body.priority !== undefined && !["high", "medium", "low"].includes(body.priority)) {
+    return NextResponse.json({ error: "priority must be high/medium/low" }, { status: 400 });
+  }
+
   await prisma.project.upsert({
     where: { name },
     update: {
@@ -83,6 +87,7 @@ export async function PUT(
       ...(body.command !== undefined && { command: body.command }),
       ...(body.repo_url !== undefined && { repoUrl: body.repo_url }),
       ...(body.repo_token !== undefined && { repoToken: body.repo_token }),
+      ...(body.priority !== undefined && { priority: body.priority }),
     },
     create: {
       name,

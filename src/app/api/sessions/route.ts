@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
       display_name: p.displayName,
       description: p.description,
       color: p.color,
+      priority: p.priority,
       cwd: p.cwd,
       command: p.command,
       repo_url: p.repoUrl,

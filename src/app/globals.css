@@ -2361,25 +2361,31 @@ select {
   outline: none;
 }
 .project-search:focus { border-color: var(--accent); }
-.machine-chips {
-  display: flex;
-  gap: 0.35rem;
-  overflow-x: auto;
-  padding-bottom: 0.2rem;
-}
-.machine-chip {
+
+.priority-badge {
   flex-shrink: 0;
-  padding: 0.25rem 0.65rem;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 999px;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.78rem;
-  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
   cursor: pointer;
+  margin-right: 0.5rem;
 }
-.machine-chip.active {
-  background: rgba(99,102,241,0.18);
-  border-color: var(--accent);
-  color: var(--text);
+.priority-badge.high { border-color: rgba(239,68,68,0.6); color: #f87171; background: rgba(239,68,68,0.08); }
+.priority-badge.medium { border-color: rgba(251,191,36,0.5); color: #fbbf24; }
+.priority-badge.low { opacity: 0.55; }
+.low-priority-toggle {
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 0.5rem;
+  border: 1px dashed rgba(255,255,255,0.15);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
 }
+.low-priority-toggle:hover { background: var(--bg-hover); }
