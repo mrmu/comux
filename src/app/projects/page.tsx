@@ -59,9 +59,17 @@ export default function ProjectsPage() {
   const [showLow, setShowLow] = useState(false);
   const [opens, setOpens] = useState<Record<string, { n: number; at: number }>>({});
 
+  // Grouping/collapse uses the priority AS LOADED, not the live value —
+  // otherwise cycling 中→低 makes the card vanish into the collapsed
+  // section mid-tap (and you can never tap through to 高). The badge shows
+  // the live value; the new grouping applies on the next visit.
+  const [basePriority, setBasePriority] = useState<Record<string, string>>({});
+
   const loadSessions = useCallback(async () => {
     try {
-      setSessions(await api.get("/api/sessions"));
+      const data: SessionInfo[] = await api.get("/api/sessions");
+      setSessions(data);
+      setBasePriority(Object.fromEntries(data.map((s) => [s.name, s.priority || "medium"])));
     } catch {
       setSessions([]);
     }
@@ -94,9 +102,11 @@ export default function ProjectsPage() {
       ].join("\n").toLowerCase();
       return hay.includes(q);
     };
-    // Priority first, then most-opened, recency, name.
+    // Priority first (as-loaded, see basePriority), then most-opened,
+    // recency, name.
+    const baseOf = (s: SessionInfo) => basePriority[s.name] ?? s.priority ?? "medium";
     return sessions.filter(match).sort((a, b) => {
-      const pr = (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1);
+      const pr = (PRIORITY_RANK[baseOf(a)] ?? 1) - (PRIORITY_RANK[baseOf(b)] ?? 1);
       if (pr !== 0) return pr;
       const oa = opens[a.name] || { n: 0, at: 0 };
       const ob = opens[b.name] || { n: 0, at: 0 };
@@ -104,13 +114,14 @@ export default function ProjectsPage() {
       if (ob.at !== oa.at) return ob.at - oa.at;
       return a.name.localeCompare(b.name);
     });
-  }, [sessions, query, opens]);
+  }, [sessions, query, opens, basePriority]);
 
   // Low-priority projects stay collapsed — unless the user is searching,
   // in which case they explicitly want to find things.
   const searching = query.trim().length > 0;
-  const active = searching ? filtered : filtered.filter((s) => s.priority !== "low");
-  const low = searching ? [] : filtered.filter((s) => s.priority === "low");
+  const isLowLoaded = (s: SessionInfo) => (basePriority[s.name] ?? s.priority) === "low";
+  const active = searching ? filtered : filtered.filter((s) => !isLowLoaded(s));
+  const low = searching ? [] : filtered.filter(isLowLoaded);
 
   const openProject = (s: SessionInfo) => {
     recordOpen(s.name);
