@@ -180,6 +180,9 @@ export default function TerminalView({
     async function initTerminal() {
       const { Terminal } = await import("@xterm/xterm");
       const { FitAddon } = await import("@xterm/addon-fit");
+      const { WebglAddon } = await import("@xterm/addon-webgl");
+      const { WebLinksAddon } = await import("@xterm/addon-web-links");
+      const { Unicode11Addon } = await import("@xterm/addon-unicode11");
 
       if (cancelled || !containerRef.current) return;
 
@@ -201,8 +204,33 @@ export default function TerminalView({
 
       fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
+      // Correct CJK/emoji widths — agents print plenty of both
+      terminal.loadAddon(new Unicode11Addon());
+      terminal.unicode.activeVersion = "11";
+      // URLs become clickable (agents paste PR/deploy links constantly)
+      terminal.loadAddon(new WebLinksAddon());
       terminal.open(containerRef.current);
+      // GPU renderer — same as VS Code's terminal. Big win for TUI-heavy
+      // output (agent spinners redraw constantly). Falls back to the DOM
+      // renderer on context loss or unsupported devices.
+      try {
+        const webgl = new WebglAddon();
+        webgl.onContextLoss(() => webgl.dispose());
+        terminal.loadAddon(webgl);
+      } catch { /* no WebGL — DOM renderer is fine */ }
       setTimeout(() => fitAddon.fit(), 50);
+
+      // Copy-on-select for NATIVE selections (Shift+drag). Plain drag goes
+      // through tmux copy-mode → OSC 52; this makes both paths end up in
+      // the clipboard. Debounced so we don't spam the clipboard mid-drag.
+      let copyTimer: ReturnType<typeof setTimeout> | null = null;
+      terminal.onSelectionChange(() => {
+        if (copyTimer) clearTimeout(copyTimer);
+        copyTimer = setTimeout(() => {
+          const sel = terminal?.getSelection();
+          if (sel) navigator.clipboard?.writeText(sel).catch(() => {});
+        }, 200);
+      });
 
       terminal.onData((data: string) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
