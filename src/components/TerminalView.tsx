@@ -210,6 +210,24 @@ export default function TerminalView({
         }
       });
 
+      // OSC 52: tmux (set-clipboard on) reports copied text as
+      // "<target>;<base64>" when a mouse-drag copy completes in copy-mode.
+      // Write it to the browser clipboard so drag-to-select copies for
+      // real — without this the text lands only in tmux's internal buffer
+      // and the selection just seems to vanish. Requires a secure context
+      // (https / localhost); silently a no-op elsewhere.
+      terminal.parser.registerOscHandler(52, (data: string) => {
+        const semi = data.indexOf(";");
+        const b64 = semi >= 0 ? data.slice(semi + 1) : data;
+        if (!b64 || b64 === "?") return true; // "?" is a read query — ignore
+        try {
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          const text = new TextDecoder().decode(bytes);
+          navigator.clipboard?.writeText(text).catch(() => {});
+        } catch { /* malformed base64 — drop */ }
+        return true;
+      });
+
       const resizeObserver = new ResizeObserver(() => {
         fitAddon?.fit();
         if (ws && ws.readyState === WebSocket.OPEN && terminal) {

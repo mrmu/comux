@@ -100,6 +100,12 @@ export async function createSession(
   // after it's set; 50k lines ≈ a long agent session.
   await runTmux("set-option", "-g", "mouse", "on").catch(() => {});
   await runTmux("set-option", "-g", "history-limit", "50000").catch(() => {});
+  // Route tmux copies (mouse-drag release in copy-mode) out to the client
+  // as OSC 52 — the web terminal catches it and writes the browser
+  // clipboard, so drag-to-select actually copies. terminal-features tells
+  // tmux our xterm-256color client really does support clipboard writes.
+  await runTmux("set-option", "-g", "set-clipboard", "on").catch(() => {});
+  await runTmux("set-option", "-ga", "terminal-features", "xterm*:clipboard").catch(() => {});
 
   // Belt-and-suspenders: also export PATH in the shell so it wins over
   // dotfiles that reset it — but ONLY when the line fits well inside the
