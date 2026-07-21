@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { isValidCwd } from "@/lib/validate";
 import { getAllowedCwdRoots } from "@/lib/settings";
 import { gitClone, inspectCwd } from "@/lib/git";
+import { syncComuxDir } from "@/lib/sync-comux-dir";
 
 export async function POST(
   request: NextRequest,
@@ -71,6 +72,10 @@ export async function POST(
       { status: 500 }
     );
   }
+
+  // The pre-clone cleanup removed any seeded `.comux/`; regenerate it so
+  // the fresh checkout immediately carries hosts.md & friends.
+  await syncComuxDir(name);
 
   // Re-inspect so the UI can refresh status without a second round-trip.
   const status = await inspectCwd(project.cwd, project.repoUrl);
