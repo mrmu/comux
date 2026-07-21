@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, FormEvent } from "react";
 import { api } from "@/lib/api";
 import { TrashIcon } from "./icons";
 import SectionSwitcher from "./SectionSwitcher";
+import MachineBadge from "./MachineBadge";
 
 interface User {
   id: number;
@@ -96,6 +97,7 @@ export default function AccountPage({
       <header className="top-bar">
         <img src="/logo-robot.png" alt="" className="top-logo" />
         <SectionSwitcher current="account" />
+        <MachineBadge />
         <button className="logout-btn" onClick={logout}>Logout</button>
       </header>
 
@@ -110,7 +112,10 @@ export default function AccountPage({
           <div className="form-row">
             <label>Local SSH Host</label>
             <input type="text" placeholder="e.g. devops@linode-audi-inv" value={localHost} onChange={(e) => setLocalHost(e.target.value)} />
-            <p className="settings-hint">Projects deployed to this host will run commands locally instead of SSH</p>
+            <p className="settings-hint">
+              （舊機制）手動標記本機的 ssh 名稱。現在建議改用 Machines 頁「從 Tailscale 同步」，
+              comux 會自動辨識主開發機；這欄僅供沒掛站點的舊 host 判斷本機用。
+            </p>
           </div>
           <div className="form-row">
             <div className="form-input-group">

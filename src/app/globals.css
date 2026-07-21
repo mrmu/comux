@@ -2227,3 +2227,61 @@ select {
   .notes-panel { max-width: 400px; }
   .issue-filters { max-width: 600px; margin: 0 auto; width: 100%; }
 }
+
+/* ─── Machines (Tailscale site registry) ─────────────────────────── */
+.machine-badge {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.35);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+}
+.machine-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.machine-item {
+  padding: 0.55rem 0.7rem; background: var(--bg-card);
+  border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.82rem;
+}
+.machine-item.self { border-color: rgba(99,102,241,0.45); }
+.machine-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.machine-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: rgba(255,255,255,0.18); flex-shrink: 0;
+}
+.machine-dot.online { background: #4ade80; }
+.machine-hostname { font-weight: 600; font-family: var(--font-mono, monospace); }
+.machine-self-badge {
+  padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600;
+  background: rgba(99,102,241,0.18); color: #a5b4fc;
+}
+.machine-src-badge {
+  padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.7rem;
+  background: rgba(255,255,255,0.08); color: var(--text-muted);
+}
+.machine-meta { color: var(--text-muted); font-size: 0.75rem; }
+.machine-actions { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+.machine-sub {
+  margin-top: 0.35rem; display: flex; gap: 0.75rem; align-items: center;
+  color: var(--text-muted); font-size: 0.76rem; flex-wrap: wrap;
+}
+.machine-note { color: var(--text-muted); }
+.machine-edit { margin-top: 0.45rem; display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.machine-edit input {
+  flex: 1; min-width: 180px;
+  padding: 0.4rem 0.55rem; border: 1px solid var(--bg-input);
+  border-radius: var(--radius-sm); background: var(--bg-input);
+  color: var(--text); font-size: 0.82rem; outline: none; font-family: inherit;
+}
+.machine-ping { margin-top: 0.4rem; font-size: 0.78rem; }
+.machine-ping.ok { color: #4ade80; }
+.machine-ping.err { color: #f87171; }
+
+/* host add/edit rows gained machine + path selectors */
+.host-add select { min-width: 0; }
+.host-path { color: var(--text-muted); font-family: var(--font-mono, monospace); font-size: 0.76rem; }
+.modal-host-row { display: flex; gap: 0.4rem; margin-top: 0.3rem; }
+.modal-host-row select { flex: 0 0 45%; min-width: 0; }
+.modal-host-row input { flex: 1; min-width: 0; }

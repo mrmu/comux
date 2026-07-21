@@ -14,8 +14,20 @@ interface Host {
   id: number;
   name: string;
   ssh_target: string;
+  machine_id: number | null;
+  path: string;
+  deploy_type: string;
   env: string;
   description: string;
+  machine: { id: number; hostname: string; ssh_user: string; is_self: boolean } | null;
+}
+
+interface MachineOpt {
+  id: number;
+  hostname: string;
+  ssh_user: string;
+  online: boolean;
+  is_self: boolean;
 }
 
 interface ChatSession {
@@ -270,10 +282,18 @@ export default function ProjectSettings({
 
   // Hosts
   const [hosts, setHosts] = useState<Host[]>([]);
-  const [newHost, setNewHost] = useState({ name: "", ssh_target: "", env: "production", description: "" });
+  const emptyNewHost = {
+    name: "", ssh_target: "", machine_id: "", path: "",
+    deploy_type: "ssh", env: "production", description: "",
+  };
+  const [newHost, setNewHost] = useState(emptyNewHost);
   const [editingHostId, setEditingHostId] = useState<number | null>(null);
   const [hostDraft, setHostDraft] = useState<Host | null>(null);
   const [hostBusy, setHostBusy] = useState(false);
+  const [hostError, setHostError] = useState("");
+
+  // Machine registry (Tailscale sites) for the host dropdowns
+  const [machines, setMachines] = useState<MachineOpt[]>([]);
 
   // Chat sessions
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -340,16 +360,22 @@ export default function ProjectSettings({
 
   const loadHosts = useCallback(async () => {
     try {
-      const data = await api.get(`/api/sessions/${projectName}/hosts`);
-      setHosts(data.map((h: Record<string, unknown>) => ({
-        id: h.id as number,
-        name: h.name as string,
-        ssh_target: h.sshTarget as string,
-        env: h.env as string,
-        description: (h.description || "") as string,
-      })));
+      setHosts(await api.get(`/api/sessions/${projectName}/hosts`));
     } catch { setHosts([]); }
   }, [projectName]);
+
+  const loadMachines = useCallback(async () => {
+    try {
+      const data = await api.get("/api/machines");
+      setMachines(data.machines.map((m: Record<string, unknown>) => ({
+        id: m.id as number,
+        hostname: m.hostname as string,
+        ssh_user: (m.ssh_user || "") as string,
+        online: !!m.online,
+        is_self: !!m.is_self,
+      })));
+    } catch { setMachines([]); }
+  }, []);
 
   const loadChatSessions = useCallback(async () => {
     try {
@@ -390,12 +416,13 @@ export default function ProjectSettings({
     loadProject();
     loadDocs();
     loadHosts();
+    loadMachines();
     loadChatSessions();
     loadClaudeMd();
     loadAgentPointers();
     loadGitStatus();
     loadHealthChecks();
-  }, [loadProject, loadDocs, loadHosts, loadChatSessions, loadClaudeMd, loadAgentPointers, loadGitStatus, loadHealthChecks]);
+  }, [loadProject, loadDocs, loadHosts, loadMachines, loadChatSessions, loadClaudeMd, loadAgentPointers, loadGitStatus, loadHealthChecks]);
 
   const saveProject = async () => {
     setSaving(true);
@@ -442,18 +469,29 @@ export default function ProjectSettings({
   };
 
   const addHost = async () => {
-    if (!newHost.name || !newHost.ssh_target) return;
+    const needsTarget = newHost.deploy_type === "ssh" && !newHost.machine_id && !newHost.ssh_target;
+    if (!newHost.name || needsTarget) return;
+    setHostError("");
     try {
-      await api.post(`/api/sessions/${projectName}/hosts`, newHost);
-      setNewHost({ name: "", ssh_target: "", env: "production", description: "" });
+      await api.post(`/api/sessions/${projectName}/hosts`, {
+        ...newHost,
+        machine_id: newHost.machine_id ? parseInt(newHost.machine_id) : null,
+      });
+      setNewHost(emptyNewHost);
       loadHosts();
-    } catch { /* ignore */ }
+    } catch (e) {
+      setHostError(humanizeHostError(e instanceof Error ? e.message : String(e)));
+    }
   };
 
   const fillLocalhost = () => {
+    const self = machines.find((m) => m.is_self);
     setNewHost({
       name: "本機",
-      ssh_target: "localhost",
+      ssh_target: self ? "" : "localhost",
+      machine_id: self ? String(self.id) : "",
+      path: cwd,
+      deploy_type: "ssh",
       env: "production",
       description: "專案就跑在這台 comux 主機上，部署指令直接執行、不用 SSH",
     });
@@ -478,17 +516,39 @@ export default function ProjectSettings({
   const saveHost = async () => {
     if (!hostDraft) return;
     setHostBusy(true);
+    setHostError("");
     try {
       await api.put(`/api/sessions/${projectName}/hosts/${hostDraft.id}`, {
         name: hostDraft.name,
         ssh_target: hostDraft.ssh_target,
+        machine_id: hostDraft.machine_id,
+        path: hostDraft.path,
+        deploy_type: hostDraft.deploy_type,
         env: hostDraft.env,
         description: hostDraft.description,
       });
       await loadHosts();
       cancelEditHost();
-    } catch { /* ignore */ }
+    } catch (e) {
+      setHostError(humanizeHostError(e instanceof Error ? e.message : String(e)));
+    }
     setHostBusy(false);
+  };
+
+  function humanizeHostError(raw: string): string {
+    try { return JSON.parse(raw).error || raw; } catch { return raw; }
+  }
+
+  /** Human label for where a host points. */
+  const hostTargetLabel = (h: Host): string => {
+    if (h.deploy_type === "cloud-run") return "Cloud Run（gcloud，主開發機執行）";
+    if (h.machine) {
+      return h.machine.is_self
+        ? `本機（${h.machine.hostname}）`
+        : `ssh ${h.machine.ssh_user ? `${h.machine.ssh_user}@` : ""}${h.machine.hostname}`;
+    }
+    if (h.ssh_target === "localhost" || h.ssh_target === "127.0.0.1") return "本機";
+    return h.ssh_target ? `ssh ${h.ssh_target}` : "（未設定）";
   };
 
   const selectChatSession = async (sessionId: string) => {
@@ -749,8 +809,9 @@ export default function ProjectSettings({
         <section className="settings-section">
           <h3>部署主機</h3>
           <p className="settings-hint">
-            每個環境對應的 SSH 目標。儲存後會自動寫入 <code>.comux/hosts.md</code>，
-            AI agent 部署前會讀取判斷要 SSH 過去還是直接在本機執行。
+            每個環境部署在哪個站點的哪個目錄。儲存後會自動寫入 <code>.comux/hosts.md</code>，
+            AI agent 部署前會讀取判斷要 SSH 到哪、<code>cd</code> 到哪個路徑。
+            站點清單來自 <a href="/machines">Machines</a> 頁（Tailscale 同步）。
           </p>
           {hosts.length === 0 ? (
             <p className="settings-hint">尚未設定任何主機</p>
@@ -775,12 +836,49 @@ export default function ProjectSettings({
                         <option value="development">development</option>
                       </select>
                     </div>
-                    <input
-                      type="text"
-                      placeholder="SSH 目標（localhost 代表本機）"
-                      value={hostDraft.ssh_target}
-                      onChange={(e) => setHostDraft({ ...hostDraft, ssh_target: e.target.value })}
-                    />
+                    <div className="host-edit-row">
+                      <select
+                        value={hostDraft.deploy_type}
+                        onChange={(e) => setHostDraft({ ...hostDraft, deploy_type: e.target.value })}
+                      >
+                        <option value="ssh">SSH 站點</option>
+                        <option value="cloud-run">Cloud Run（gcloud）</option>
+                      </select>
+                      {hostDraft.deploy_type === "ssh" && (
+                        <select
+                          value={hostDraft.machine_id ?? ""}
+                          onChange={(e) =>
+                            setHostDraft({
+                              ...hostDraft,
+                              machine_id: e.target.value ? parseInt(e.target.value) : null,
+                            })
+                          }
+                        >
+                          <option value="">（手動輸入 ssh target）</option>
+                          {machines.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.hostname}{m.is_self ? "（主開發機）" : ""}{!m.online ? "（離線）" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    {hostDraft.deploy_type === "ssh" && !hostDraft.machine_id && (
+                      <input
+                        type="text"
+                        placeholder="SSH 目標（localhost 代表本機）"
+                        value={hostDraft.ssh_target}
+                        onChange={(e) => setHostDraft({ ...hostDraft, ssh_target: e.target.value })}
+                      />
+                    )}
+                    {hostDraft.deploy_type === "ssh" && (
+                      <input
+                        type="text"
+                        placeholder="該站點上的專案路徑（例：/srv/my-app）"
+                        value={hostDraft.path}
+                        onChange={(e) => setHostDraft({ ...hostDraft, path: e.target.value })}
+                      />
+                    )}
                     <input
                       type="text"
                       placeholder="描述（選填，會寫入 .comux/hosts.md）"
@@ -818,10 +916,9 @@ export default function ProjectSettings({
                       className="host-target host-clickable"
                       onClick={() => startEditHost(h)}
                     >
-                      {h.ssh_target === "localhost" || h.ssh_target === "127.0.0.1"
-                        ? "本機"
-                        : `ssh ${h.ssh_target}`}
+                      {hostTargetLabel(h)}
                     </span>
+                    {h.path && <span className="host-path">{h.path}</span>}
                     <button
                       className="host-delete"
                       onClick={() => deleteHost(h.id)}
@@ -839,24 +936,55 @@ export default function ProjectSettings({
             <div className="host-add">
               <input type="text" placeholder="名稱（例：GCP 正式機）"
                 value={newHost.name} onChange={(e) => setNewHost({ ...newHost, name: e.target.value })} />
-              <input type="text" placeholder="SSH 目標（例：gcp-prod 或 localhost）"
-                value={newHost.ssh_target} onChange={(e) => setNewHost({ ...newHost, ssh_target: e.target.value })} />
               <select value={newHost.env} onChange={(e) => setNewHost({ ...newHost, env: e.target.value })}>
                 <option value="production">production</option>
                 <option value="staging">staging</option>
                 <option value="development">development</option>
               </select>
+              <select value={newHost.deploy_type}
+                onChange={(e) => setNewHost({ ...newHost, deploy_type: e.target.value })}>
+                <option value="ssh">SSH 站點</option>
+                <option value="cloud-run">Cloud Run</option>
+              </select>
+            </div>
+            {newHost.deploy_type === "ssh" && (
+              <div className="host-add">
+                <select value={newHost.machine_id}
+                  onChange={(e) => setNewHost({ ...newHost, machine_id: e.target.value })}>
+                  <option value="">（手動輸入 ssh target）</option>
+                  {machines.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.hostname}{m.is_self ? "（主開發機）" : ""}{!m.online ? "（離線）" : ""}
+                    </option>
+                  ))}
+                </select>
+                {!newHost.machine_id && (
+                  <input type="text" placeholder="SSH 目標（例：gcp-prod 或 localhost）"
+                    value={newHost.ssh_target} onChange={(e) => setNewHost({ ...newHost, ssh_target: e.target.value })} />
+                )}
+                <input type="text" placeholder="路徑（例：/srv/my-app）"
+                  value={newHost.path} onChange={(e) => setNewHost({ ...newHost, path: e.target.value })} />
+              </div>
+            )}
+            <div className="host-add">
               <button className="btn-primary" onClick={addHost}
                 style={{ flex: "none", padding: "0.4rem 0.8rem" }}>新增</button>
+              <button
+                onClick={fillLocalhost}
+                className="host-quick-local"
+                type="button"
+                title="一鍵填入本機主機設定"
+              >
+                + 專案在這台 comux 主機
+              </button>
             </div>
-            <button
-              onClick={fillLocalhost}
-              className="host-quick-local"
-              type="button"
-              title="一鍵填入本機主機設定"
-            >
-              + 專案在這台 comux 主機
-            </button>
+            {machines.length === 0 && (
+              <p className="settings-hint">
+                還沒有站點資料 — 到 <a href="/machines">Machines</a> 頁按「從 Tailscale 同步」，
+                之後就能用下拉選單選站點。
+              </p>
+            )}
+            {hostError && <p className="msg-err">{hostError}</p>}
           </div>
         </section>
 

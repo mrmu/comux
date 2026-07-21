@@ -115,7 +115,8 @@ docs/deploy/        # Deployment guide
 - **User**: email (unique), password (bcrypt), name
 - **Setting**: key-value store (projectsRoot, etc.)
 - **Project**: name, displayName, color, cwd, command, jsonlSessionId
-- **Host**: projectName → sshTarget, env (production/staging/development)
+- **Machine**: Tailscale 站點註冊表 — hostname (MagicDNS label, unique), sshUser, online, isSelf (comux 主開發機), source (tailscale/manual)；由 `tailscale status --json` 同步
+- **Host**: projectName → machineId (FK → Machine) + path (該站點上的專案目錄) + deployType (ssh/cloud-run), env (production/staging/development)；sshTarget 為舊制手填欄位，machineId 存在時以 Machine 為準
 - **Note**: sessionName → content (一對多)
 
 ## Security

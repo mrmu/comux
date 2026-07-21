@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SectionSwitcher from "@/components/SectionSwitcher";
+import MachineBadge from "@/components/MachineBadge";
 import { api } from "@/lib/api";
 import { ISSUE_STATUSES, ISSUE_SEVERITIES, isClosedStatus } from "@/lib/issues";
 
@@ -85,6 +86,7 @@ function IssuesListPageContent() {
       <header className="top-bar">
         <img src="/logo-robot.png" alt="" className="top-logo" />
         <SectionSwitcher current="issues" />
+        <MachineBadge />
         <button
           className="icon-btn"
           title="New issue"

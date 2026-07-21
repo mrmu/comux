@@ -54,14 +54,43 @@ model Host {
   id          Int      @id @default(autoincrement())
   projectName String   @map("project_name")
   name        String   // display name, e.g. "GCP Prod"
-  sshTarget   String   @map("ssh_target") // e.g. "gcp-prod" (Tailscale machine name)
+  sshTarget   String   @map("ssh_target") // legacy free-text target; superseded by machineId when set
+  machineId   Int?     @map("machine_id") // FK → Machine (Tailscale site registry)
+  path        String   @default("")       // project directory on that machine
+  deployType  String   @default("ssh") @map("deploy_type") // ssh / cloud-run
   env         String   @default("production") // production, staging, development
   description String   @default("")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   project     Project  @relation(fields: [projectName], references: [name], onDelete: Cascade)
+  machine     Machine? @relation(fields: [machineId], references: [id], onDelete: SetNull)
 
   @@map("hosts")
+}
+
+// Tailscale site registry — one row per machine in the tailnet, synced from
+// `tailscale status --json` on the dev machine comux runs on. `hostname` is
+// the MagicDNS first label (ssh-able), NOT the display HostName which may
+// contain spaces / non-ASCII. `isSelf` marks the machine comux itself runs
+// on — the anchor for "you are here" in generated .comux/hosts.md.
+model Machine {
+  id          Int      @id @default(autoincrement())
+  hostname    String   @unique               // MagicDNS label, e.g. "linode-audi-inv"
+  displayName String   @default("") @map("display_name") // Tailscale HostName as-is
+  dnsName     String   @default("") @map("dns_name")     // full MagicDNS FQDN
+  tailscaleIp String   @default("") @map("tailscale_ip")
+  os          String   @default("")
+  sshUser     String   @default("") @map("ssh_user")     // default login user, e.g. "devops"
+  note        String   @default("")
+  online      Boolean  @default(false)
+  isSelf      Boolean  @default(false) @map("is_self")
+  source      String   @default("tailscale")  // tailscale / manual
+  lastSeenAt  DateTime? @map("last_seen_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  hosts       Host[]
+
+  @@map("machines")
 }
 
 // Notes are prompt-candidate items — atomic units sent to AI. Status tracks

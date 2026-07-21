@@ -19,6 +19,29 @@ export function isValidCwd(cwd: string, ...roots: string[]): boolean {
   });
 }
 
+/** Hostname / MagicDNS label / FQDN — safe to pass to ssh as a target.
+ *  No leading dash so it can never be mistaken for an ssh option. */
+const HOSTNAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+export function isValidHostname(hostname: string): boolean {
+  return hostname.length > 0 && hostname.length <= 253 && HOSTNAME_RE.test(hostname);
+}
+
+/** Unix login name for `user@host` ssh targets. */
+const SSH_USER_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+export function isValidSshUser(user: string): boolean {
+  return user.length > 0 && user.length <= 64 && SSH_USER_RE.test(user);
+}
+
+/** Remote project path written into .comux/hosts.md — absolute, no shell
+ *  metacharacters or traversal (agents will paste it after `cd`). */
+export function isValidRemotePath(p: string): boolean {
+  if (!p || p.length > 300) return false;
+  if (!p.startsWith("/") && !p.startsWith("~")) return false;
+  return !/[|;&`$(){}<>"'\\\n]/.test(p) && !/\.\.\//.test(p);
+}
+
 /** Validate command — no shell metacharacters, reasonable length */
 const DANGEROUS_PATTERNS = [
   /[|;&`$(){}]/,     // shell operators

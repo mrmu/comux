@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import NewSessionModal from "@/components/NewSessionModal";
 import SectionSwitcher from "@/components/SectionSwitcher";
+import MachineBadge from "@/components/MachineBadge";
 
 interface SessionInfo {
   name: string;
@@ -35,6 +36,7 @@ export default function ProjectsPage() {
       <header className="top-bar">
         <img src="/logo-robot.png" alt="" className="top-logo" />
         <SectionSwitcher current="projects" />
+        <MachineBadge />
         <button className="icon-btn" title="New project" onClick={() => setShowModal(true)}>+</button>
       </header>
       <div className="session-list">

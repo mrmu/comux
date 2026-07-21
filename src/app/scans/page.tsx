@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SectionSwitcher from "@/components/SectionSwitcher";
+import MachineBadge from "@/components/MachineBadge";
 import { api } from "@/lib/api";
 
 interface Project {
@@ -105,6 +106,7 @@ function ScansListPageContent() {
       <header className="top-bar">
         <img src="/logo-robot.png" alt="" className="top-logo" />
         <SectionSwitcher current="scans" />
+        <MachineBadge />
         <button
           className="icon-btn"
           title="Run new scan"

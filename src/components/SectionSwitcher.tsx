@@ -7,11 +7,12 @@ import {
   CheckIcon,
   ChevronDownIcon,
   IssuesIcon,
+  MachinesIcon,
   ProjectsIcon,
   ScansIcon,
 } from "./icons";
 
-export type SectionKey = "projects" | "issues" | "scans" | "account";
+export type SectionKey = "projects" | "issues" | "scans" | "machines" | "account";
 
 interface Section {
   key: SectionKey;
@@ -24,6 +25,7 @@ const SECTIONS: Section[] = [
   { key: "projects", label: "Projects", path: "/projects", Icon: ProjectsIcon },
   { key: "issues",   label: "Issues",   path: "/issues",   Icon: IssuesIcon },
   { key: "scans",    label: "Scans",    path: "/scans",    Icon: ScansIcon },
+  { key: "machines", label: "Machines", path: "/machines", Icon: MachinesIcon },
   { key: "account",  label: "Account",  path: "/account",  Icon: AccountIcon },
 ];
 
