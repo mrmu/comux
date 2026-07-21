@@ -362,7 +362,7 @@ function WorkspacePageContent({
             key={projectName}
             sessionName={projectName}
             agent={agent}
-            onAgentLaunched={(a) => { setAgent(a); switchView("chat"); }}
+            onAgentLaunched={(a, ready) => { setAgent(a); if (ready) switchView("chat"); }}
           />
         </div>
 

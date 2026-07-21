@@ -91,5 +91,34 @@ export async function POST(
     data: { agent: agentId },
   });
 
-  return NextResponse.json({ ok: true, agent: agentId });
+  // Claude Code shows a one-time folder-trust prompt before the REPL. On a
+  // comux host that decision was already made when the user created the
+  // project (and we launch with --dangerously-skip-permissions anyway), so
+  // accept it automatically and only report ready once the REPL is up —
+  // the UI holds the Terminal tab until then instead of bouncing the user
+  // to a Chat view that can't answer interactive prompts.
+  const ready = agentId === "claude" ? await waitForClaudeReady(name) : true;
+
+  return NextResponse.json({ ok: true, agent: agentId, ready });
+}
+
+const TRUST_PROMPT_RE = /trust this folder|Do you trust|Quick safety check/i;
+// "? for shortcuts" / "bypass permissions" only ever appear in the live
+// REPL footer — not in the shell echo of the launch command.
+const REPL_READY_RE = /\? for shortcuts|bypass permissions/i;
+
+async function waitForClaudeReady(session: string): Promise<boolean> {
+  const deadline = Date.now() + 15_000;
+  let trustAccepted = false;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 600));
+    const pane = await tmux.capturePane(session, 50).catch(() => "");
+    if (REPL_READY_RE.test(pane)) return true;
+    if (!trustAccepted && TRUST_PROMPT_RE.test(pane)) {
+      // "Yes, I trust this folder" is pre-selected — Enter confirms it
+      await tmux.sendSpecialKey(session, "Enter").catch(() => {});
+      trustAccepted = true;
+    }
+  }
+  return false;
 }

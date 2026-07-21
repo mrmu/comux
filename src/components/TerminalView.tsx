@@ -29,17 +29,26 @@ export default function TerminalView({
 }: {
   sessionName: string;
   agent: string | null;
-  onAgentLaunched: (agent: string) => void;
+  onAgentLaunched: (agent: string, ready: boolean) => void;
 }) {
   const [launching, setLaunching] = useState<string | null>(null);
   const [launchError, setLaunchError] = useState("");
+  const [launchNotice, setLaunchNotice] = useState("");
 
   const launchAgent = async (id: AgentSpec["id"]) => {
     setLaunching(id);
     setLaunchError("");
+    setLaunchNotice("");
     try {
-      await api.post(`/api/sessions/${sessionName}/launch-agent`, { agent: id });
-      onAgentLaunched(id);
+      const res = await api.post(`/api/sessions/${sessionName}/launch-agent`, { agent: id });
+      // ready=false: the CLI is still waiting on an interactive prompt the
+      // server couldn't auto-answer — keep the user here instead of
+      // bouncing to Chat, which can't drive interactive UIs.
+      const ready = res.ready !== false;
+      if (!ready) {
+        setLaunchNotice("CLI 還在等待初始確認 — 請在下方終端機完成後，再手動切到 Chat 分頁。");
+      }
+      onAgentLaunched(id, ready);
     } catch (e) {
       setLaunchError(e instanceof Error ? e.message : String(e));
     }
@@ -353,6 +362,7 @@ export default function TerminalView({
         <span className="terminal-focus-hint">Tap terminal to type</span>
       </div>
       {launchError && <div className="terminal-launch-error">{launchError}</div>}
+      {launchNotice && <div className="terminal-launch-error" style={{ color: "#fbbf24" }}>{launchNotice}</div>}
     </div>
   );
 }
