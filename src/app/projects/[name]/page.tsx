@@ -14,6 +14,7 @@ interface SessionInfo {
   name: string;
   display_name: string;
   color: string;
+  running: boolean;
 }
 
 const OPEN_TABS_KEY = "comux:openProjectTabs";
@@ -132,6 +133,12 @@ function WorkspacePageContent({
     });
   }, [projectName, sessions]);
 
+  // Tab close confirm — only shown when the session is still running, so a
+  // casual tab close can't silently kill a working agent, but ending the
+  // session (VS Code-style) is one click away.
+  const [closingTab, setClosingTab] = useState<string | null>(null);
+  const [closeBusy, setCloseBusy] = useState(false);
+
   const closeProjectTab = useCallback(
     (name: string) => {
       setOpenTabs((prev) => {
@@ -151,6 +158,32 @@ function WorkspacePageContent({
     },
     [projectName, router]
   );
+
+  /** X on a tab: prompt if the tmux session is alive, close straight away
+   *  if it isn't. */
+  const requestCloseTab = useCallback(
+    (name: string) => {
+      const p = sessions.find((s) => s.name === name);
+      if (p?.running) setClosingTab(name);
+      else closeProjectTab(name);
+    },
+    [sessions, closeProjectTab]
+  );
+
+  const endSessionAndCloseTab = useCallback(async () => {
+    if (!closingTab) return;
+    setCloseBusy(true);
+    try {
+      // keep=true: kill tmux only — project data stays
+      await api.del(`/api/sessions/${closingTab}?keep=true`);
+      try { setSessions(await api.get("/api/sessions")); } catch { /* ignore */ }
+      closeProjectTab(closingTab);
+      setClosingTab(null);
+    } catch (e) {
+      alert("結束 session 失敗：" + (e instanceof Error ? e.message : String(e)));
+    }
+    setCloseBusy(false);
+  }, [closingTab, closeProjectTab]);
 
   // Sync tab to URL
   const switchView = useCallback((view: string) => {
@@ -229,14 +262,42 @@ function WorkspacePageContent({
                 <span>{display}</span>
                 <span
                   className="tab-close"
-                  title="關閉專案分頁（不會結束 tmux session 也不刪除專案）"
-                  onClick={(e) => { e.stopPropagation(); closeProjectTab(tabName); }}
+                  title="關閉專案分頁"
+                  onClick={(e) => { e.stopPropagation(); requestCloseTab(tabName); }}
                 >&times;</span>
               </button>
             );
           })}
         </div>
       </div>
+
+      {/* Close-tab confirm — session still running */}
+      {closingTab && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setClosingTab(null)}>
+          <div className="modal">
+            <h2>關閉「{sessions.find((s) => s.name === closingTab)?.display_name || closingTab}」</h2>
+            <p className="settings-hint" style={{ marginBottom: "1rem" }}>
+              這個專案的 tmux session 還在執行中 — 終端機裡的程式（含 AI agent）可能正在跑。
+              只關閉分頁的話，session 會繼續在背景執行，隨時可以回來。
+            </p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setClosingTab(null)} disabled={closeBusy}>
+                取消
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => { closeProjectTab(closingTab); setClosingTab(null); }}
+                disabled={closeBusy}
+              >
+                只關閉分頁
+              </button>
+              <button className="btn-danger" onClick={endSessionAndCloseTab} disabled={closeBusy}>
+                {closeBusy ? "結束中..." : "結束 session 並關閉"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Layer 2: View Tabs */}
       <div className="view-tabs-bar">
