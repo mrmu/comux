@@ -17,7 +17,10 @@ export async function POST(
   if (specialKey) {
     await tmux.sendSpecialKey(name, specialKey);
   } else if (text) {
-    if (body.raw) {
+    if (body.paste) {
+      // Bracketed paste — lands in the TUI input without auto-submitting
+      await tmux.pasteText(name, text);
+    } else if (body.raw) {
       await tmux.sendRawKeys(name, text);
     } else {
       await tmux.sendKeys(name, text);

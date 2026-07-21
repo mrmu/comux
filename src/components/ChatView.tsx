@@ -49,7 +49,6 @@ function esc(str: string): string {
   return div.innerHTML;
 }
 
-const PENDING_TIMEOUT_MS = 60_000;
 
 function renderMarkdown(text: string): string {
   if (!text) return "";
@@ -134,30 +133,16 @@ const MessageList = memo(
   }
 );
 
+/** Read-only transcript of the agent's JSONL conversation. All interaction
+ *  happens in the Terminal tab — this view exists for comfortable reading
+ *  (especially on mobile, where selecting text off the xterm canvas is
+ *  nearly impossible) and for switching which recorded session to read. */
 export default function ChatView({
   sessionName,
-  prefill,
 }: {
   sessionName: string;
-  prefill?: { text: string; nonce: number } | null;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // Optimistic echo: messages just sent by the user, shown immediately while
-  // we wait for Claude Code to write them into JSONL and SSE to round-trip.
-  // Entries are dropped once the real message appears in `messages`, or after
-  // PENDING_TIMEOUT_MS as a safety net — Claude Code wraps interrupts as
-  // `<system-reminder>...your text...</system-reminder>` when sent during a
-  // running turn, so exact-equality dedup misses; we match by includes() and
-  // bound staleness with a timeout.
-  const [pendingUserTexts, setPendingUserTexts] = useState<{ text: string; sentAt: number }[]>([]);
-  const draftKey = `chat-draft:${sessionName}`;
-  // Initialize from localStorage so the draft is present on first paint.
-  // Wrapped because iOS private browsing historically threw on any access.
-  const [input, setInput] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    try { return localStorage.getItem(`chat-draft:${sessionName}`) || ""; }
-    catch { return ""; }
-  });
   const [sessionInfo, setSessionInfo] = useState<SessionsResponse | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   // Bumped on pin/unpin to force the SSE stream to reconnect — otherwise the
@@ -171,8 +156,6 @@ export default function ChatView({
   const messagesRef = useRef<HTMLDivElement>(null);
   const userSelectingRef = useRef(false);
   const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
-  // Set on send to force scroll-to-bottom even when the user was scrolled up.
-  const forceScrollRef = useRef(false);
   // Sticky-follow flag: true = auto-scroll on every new message. Flipped off
   // when the user scrolls up, back on when they return to the bottom.
   // Decoupling this from a per-update distance check avoids a large incoming
@@ -205,21 +188,6 @@ export default function ChatView({
     return () => clearInterval(id);
   }, [loadSessions]);
 
-  // Re-load draft when sessionName changes — covers the case where ChatView
-  // isn't remounted across project switches (useState init only runs once).
-  useEffect(() => {
-    try { setInput(localStorage.getItem(draftKey) || ""); }
-    catch { /* ignore */ }
-  }, [draftKey]);
-
-  // Prefill from an external action (e.g. Notes "Ask AI" button). The nonce
-  // is part of the dep so the same text can be prefilled twice in a row.
-  useEffect(() => {
-    if (!prefill) return;
-    setInput(prefill.text);
-    try { localStorage.setItem(draftKey, prefill.text); } catch { /* ignore */ }
-  }, [prefill, draftKey]);
-
   // Poll ui-state for Claude Code's own status-line text ("Thinking...",
   // "Compacting...", etc.). Pauses when the tab isn't visible to save cycles.
   useEffect(() => {
@@ -246,36 +214,23 @@ export default function ChatView({
   // page refresh, where we always want to jump to the latest message).
   useEffect(() => {
     setMessages([]);
-    setPendingUserTexts([]);
     loadSessions();
     (async () => {
       try {
         const res = await fetch(`/api/sessions/${sessionName}/chat`);
         if (!res.ok) return;
         const data = await res.json();
-        // Set the force-scroll flag right before the messages arrive so the
-        // scroll effect sees it in the same render cycle. Setting it earlier
-        // would get consumed by the empty-state render triggered above.
-        forceScrollRef.current = true;
+        // Set the jump-to-bottom flag right before the messages arrive so
+        // the scroll effect sees it in the same render cycle.
+        scrollToBottomRef.current = true;
         setMessages(data.messages || []);
       } catch { /* SSE will pick up */ }
     })();
   }, [sessionName, loadSessions]);
 
-  // Drop optimistic entries whose text has landed in the real log,
-  // then apply the latest messages (buffering if user is selecting text).
+  // Apply the latest messages (buffering if the user is selecting text —
+  // a mid-selection re-render would wipe the selection).
   const applyLatestMessages = useCallback((msgs: ChatMessage[]) => {
-    const realUserTexts = msgs
-      .filter((m) => m.role === "user" && m.content_type === "text" && m.text)
-      .map((m) => m.text as string);
-    const now = Date.now();
-    setPendingUserTexts((prev) => {
-      const next = prev.filter((p) => {
-        if (now - p.sentAt > PENDING_TIMEOUT_MS) return false;
-        return !realUserTexts.some((t) => t === p.text || t.includes(p.text));
-      });
-      return next.length === prev.length ? prev : next;
-    });
     if (userSelectingRef.current) {
       pendingUpdateRef.current = msgs;
     } else {
@@ -412,11 +367,10 @@ export default function ChatView({
   useEffect(() => {
     const el = messagesRef.current;
     if (!el) return;
-    // Hard overrides (session switch / send) always jump to bottom and also
+    // Hard overrides (session switch) always jump to bottom and also
     // re-engage follow so subsequent chunks keep scrolling.
-    if (scrollToBottomRef.current || forceScrollRef.current) {
+    if (scrollToBottomRef.current) {
       scrollToBottomRef.current = false;
-      forceScrollRef.current = false;
       followRef.current = true;
       el.scrollTop = el.scrollHeight;
       return;
@@ -424,82 +378,7 @@ export default function ChatView({
     if (followRef.current) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [messages, pendingUserTexts]);
-
-  // Merge real messages with pending optimistic ones for display.
-  // When nothing is pending, returns the same reference as `messages` so
-  // the memoized MessageList can skip re-rendering on unrelated updates.
-  const displayMessages = useMemo<ChatMessage[]>(() => {
-    if (pendingUserTexts.length === 0) return messages;
-    return [
-      ...messages,
-      ...pendingUserTexts.map((p) => ({
-        role: "user",
-        content_type: "text",
-        text: p.text,
-      })),
-    ];
-  }, [messages, pendingUserTexts]);
-
-  // Safety net: even if SSE never fires (e.g. Claude wasn't running so no
-  // JSONL update lands), prune pending entries that have aged past the
-  // timeout so the optimistic echo doesn't pin forever.
-  useEffect(() => {
-    if (pendingUserTexts.length === 0) return;
-    const id = setInterval(() => {
-      const now = Date.now();
-      setPendingUserTexts((prev) => {
-        const next = prev.filter((p) => now - p.sentAt < PENDING_TIMEOUT_MS);
-        return next.length === prev.length ? prev : next;
-      });
-    }, 5000);
-    return () => clearInterval(id);
-  }, [pendingUserTexts.length]);
-
-  const [sendError, setSendError] = useState("");
-
-  const sendMessage = async () => {
-    const text = input.trim();
-    if (!text) return;
-    setSendError("");
-
-    // Show the user's prompt + scroll right away. The ui-state check + tmux
-    // send can take seconds on a busy session; the echo should never wait.
-    forceScrollRef.current = true;
-    setPendingUserTexts((prev) => [...prev, { text, sentAt: Date.now() }]);
-    setInput("");
-    try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
-
-    // Remove the first matching entry so duplicate sends of the same text
-    // don't all vanish on a single failure.
-    const rollback = () => {
-      setPendingUserTexts((prev) => {
-        const idx = prev.findIndex((p) => p.text === text);
-        if (idx < 0) return prev;
-        const copy = [...prev];
-        copy.splice(idx, 1);
-        return copy;
-      });
-    };
-
-    try {
-      const state = await api.get(`/api/sessions/${sessionName}/ui-state`);
-      if (!state.process || state.idle) {
-        setSendError("Claude Code is not running. Start it from the Terminal tab.");
-        rollback();
-        return;
-      }
-    } catch {
-      // Can't check — send anyway
-    }
-
-    try {
-      await api.post(`/api/sessions/${sessionName}/send`, { text });
-    } catch {
-      setSendError("Failed to send. Check the Terminal tab.");
-      rollback();
-    }
-  };
+  }, [messages]);
 
   const active = sessionInfo?.sessions.find((s) => s.active);
   const activeMode: "pinned" | "tmux" | "latest" = sessionInfo?.pinned
@@ -510,10 +389,8 @@ export default function ChatView({
   const activeIcon = activeMode === "pinned" ? "📌" : activeMode === "tmux" ? "🖥" : "⏱";
   const activeLabel = activeMode === "pinned" ? "pinned" : activeMode === "tmux" ? "tmux" : "latest";
 
-  // Viewing a session that's NOT what tmux's claude is writing to — anything
-  // you send via the input goes to tmux's current session, NOT the one on
-  // screen. That's a UX trap, so we show a warning and offer a one-click
-  // jump to the session tmux is actually running.
+  // Viewing a session that's NOT the one tmux's claude is writing to — the
+  // live conversation is elsewhere. Offer a one-click jump to it.
   const tmuxMismatch =
     !!sessionInfo?.tmuxSessionId &&
     !!sessionInfo?.activeSessionId &&
@@ -569,65 +446,32 @@ export default function ChatView({
         </div>
       )}
 
-      <MessageList messages={displayMessages} innerRef={messagesRef} />
+      <MessageList messages={messages} innerRef={messagesRef} />
 
-      {/* Chat Input — always visible */}
-      {(
-        <div className="chat-input-area">
-          {aiStatus && (
-            <div className="chat-ai-status" title="Live status from Claude Code">
-              <span className="chat-ai-status-dot" />
-              <span className="chat-ai-status-text">{aiStatus}</span>
-            </div>
-          )}
-          {tmuxMismatch && (
-            <div className="chat-mismatch-warn">
-              <span>
-                看的是 <code>{shortId(sessionInfo!.activeSessionId)}</code>，但 terminal 跑的是{" "}
-                <code>{shortId(sessionInfo!.tmuxSessionId)}</code>。訊息送出會進入 terminal 的 session。
-              </span>
-              <button
-                className="chat-mismatch-jump"
-                onClick={() => pickSession(sessionInfo!.tmuxSessionId)}
-              >
-                切到 🖥
-              </button>
-            </div>
-          )}
-          {sendError && (
-            <div className="chat-send-error">{sendError}</div>
-          )}
-          <div className="chat-input-row">
-            <textarea
-              className="chat-input"
-              placeholder="Type a prompt..."
-              rows={1}
-              value={input}
-              onChange={(e) => {
-                const v = e.target.value;
-                setInput(v);
-                try {
-                  if (v) localStorage.setItem(draftKey, v);
-                  else localStorage.removeItem(draftKey);
-                } catch { /* ignore — iOS private mode etc. */ }
-                if (sendError) setSendError("");
-                e.target.style.height = "auto";
-                e.target.style.height =
-                  Math.min(e.target.scrollHeight, 120) + "px";
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-            />
-            <button className="send-btn" onClick={sendMessage}>
-              &uarr;
+      {/* Read-only footer: live agent status + where the live session is */}
+      <div className="chat-readonly-bar">
+        {aiStatus && (
+          <div className="chat-ai-status" title="Live status from Claude Code">
+            <span className="chat-ai-status-dot" />
+            <span className="chat-ai-status-text">{aiStatus}</span>
+          </div>
+        )}
+        {tmuxMismatch && (
+          <div className="chat-mismatch-warn">
+            <span>
+              看的是 <code>{shortId(sessionInfo!.activeSessionId)}</code>，terminal 目前跑的是{" "}
+              <code>{shortId(sessionInfo!.tmuxSessionId)}</code>。
+            </span>
+            <button
+              className="chat-mismatch-jump"
+              onClick={() => pickSession(sessionInfo!.tmuxSessionId)}
+            >
+              切到 🖥
             </button>
           </div>
-        </div>
-      )}
+        )}
+        <div className="chat-readonly-hint">唯讀紀錄 — 要和 agent 互動請切到 Terminal 分頁</div>
+      </div>
     </div>
   );
 }

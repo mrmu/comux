@@ -47,7 +47,8 @@ function WorkspacePageContent({
   const { name: projectName } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get("tab") || "chat";
+  // Terminal is the primary surface; "chat" is a read-only transcript.
+  const initialTab = searchParams.get("tab") || "terminal";
 
   const [activeView, setActiveView] = useState<string>(initialTab);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -59,9 +60,6 @@ function WorkspacePageContent({
   const [showFiles, setShowFiles] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  // Prefill payload for ChatView — nonce bumps so the same text can be sent
-  // twice (e.g. re-Ask AI on the same note) and still trigger an update.
-  const [chatPrefill, setChatPrefill] = useState<{ text: string; nonce: number } | null>(null);
   // Confirm the project exists before mounting Chat/Terminal. Without this,
   // TerminalView's "empty windows → POST /api/sessions" retry would
   // auto-create a stray Project row for any name typed into the URL
@@ -71,10 +69,6 @@ function WorkspacePageContent({
   // gemini). Drives Chat-tab visibility and which transcript adapter the
   // chat view will use. null until the user clicks a launch button.
   const [agent, setAgent] = useState<string | null>(null);
-  // Live state: is the agent process actually running in the pane right
-  // now? Drives which tab we land on — `agent` alone stays set in the DB
-  // across session restarts, when Chat can't do anything yet.
-  const [agentRunning, setAgentRunning] = useState(false);
 
   // Track which project we last loaded so we can tell "first mount" apart
   // from "user switched tabs". On a switch we override activeView to the
@@ -88,7 +82,7 @@ function WorkspacePageContent({
       prevProjectName.current !== null && prevProjectName.current !== projectName;
     prevProjectName.current = projectName;
     (async () => {
-      let proj: { agent?: string | null; agent_running?: boolean } | null = null;
+      let proj: { agent?: string | null } | null = null;
       try {
         proj = await api.get(`/api/projects/${projectName}`);
       } catch {
@@ -97,12 +91,9 @@ function WorkspacePageContent({
       }
       if (cancelled) return;
       setProjectReady(true);
-      const newAgent = proj?.agent || null;
-      const newAgentRunning = !!proj?.agent_running;
-      setAgent(newAgent);
-      setAgentRunning(newAgentRunning);
+      setAgent(proj?.agent || null);
       if (isSwitch) {
-        const target = newAgent && newAgentRunning ? "chat" : "terminal";
+        const target = "terminal";
         setActiveView(target);
         router.replace(`/projects/${projectName}?tab=${target}`, { scroll: false });
       }
@@ -111,19 +102,11 @@ function WorkspacePageContent({
     return () => { cancelled = true; };
   }, [projectName, router]);
 
-  // Land on Terminal when the agent isn't actually running — Chat can't do
-  // anything until the CLI is up (the DB `agent` field survives session
-  // restarts, so it alone can't make this call). Forced at most once per
-  // project entry so the user can still open Chat manually to read the
-  // transcript while the agent is stopped.
-  const forcedViewFor = useRef<string | null>(null);
+  // The transcript tab is only meaningful once an agent has been used;
+  // if the URL asks for it on a project without one, fall back to Terminal.
   useEffect(() => {
-    if (forcedViewFor.current === projectName) return;
-    if (projectReady && !agentRunning && activeView === "chat") {
-      forcedViewFor.current = projectName;
-      setActiveView("terminal");
-    }
-  }, [projectReady, agentRunning, activeView, projectName]);
+    if (projectReady && !agent && activeView === "chat") setActiveView("terminal");
+  }, [projectReady, agent, activeView]);
 
   // Make sure the current project is in the open-tabs list; once the
   // sessions list has loaded, also drop any stale names (deleted
@@ -241,11 +224,18 @@ function WorkspacePageContent({
     setShowSettings(panel === "settings" ? (v) => !v : false);
   }, []);
 
-  const askAIFromNote = useCallback((text: string) => {
-    setChatPrefill({ text, nonce: Date.now() });
+  // "Ask AI" from a note: paste the text into the agent's terminal input
+  // (bracketed paste — nothing auto-submits) and bring the Terminal up so
+  // the user can review and hit Enter.
+  const askAIFromNote = useCallback(async (text: string) => {
     closeAllPanels();
-    switchView("chat");
-  }, [closeAllPanels, switchView]);
+    switchView("terminal");
+    try {
+      await api.post(`/api/sessions/${projectName}/send`, { text, paste: true });
+    } catch {
+      alert("送到 Terminal 失敗 — 請確認 session 還在執行。");
+    }
+  }, [closeAllPanels, switchView, projectName]);
 
   if (!projectReady) return null;
 
@@ -316,7 +306,8 @@ function WorkspacePageContent({
         <div className="view-tabs-scroll">
           {agent && (
             <button className={`view-tab${activeView === "chat" ? " active" : ""}`}
-              onClick={() => { closeAllPanels(); switchView("chat"); }}>Chat</button>
+              onClick={() => { closeAllPanels(); switchView("chat"); }}
+              title="唯讀對話紀錄">Transcript</button>
           )}
           <button className={`view-tab${activeView === "terminal" ? " active" : ""}`}
             onClick={() => { closeAllPanels(); switchView("terminal"); }}>Terminal</button>
@@ -366,7 +357,7 @@ function WorkspacePageContent({
       <div className="workspace-content">
         {agent && (
           <div style={{ display: activeView === "chat" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
-            <ChatView key={projectName} sessionName={projectName} prefill={chatPrefill} />
+            <ChatView key={projectName} sessionName={projectName} />
           </div>
         )}
         <div style={{ display: activeView === "terminal" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
@@ -374,11 +365,7 @@ function WorkspacePageContent({
             key={projectName}
             sessionName={projectName}
             agent={agent}
-            onAgentLaunched={(a, ready) => {
-              setAgent(a);
-              setAgentRunning(ready);
-              if (ready) switchView("chat");
-            }}
+            onAgentLaunched={(a) => setAgent(a)}
           />
         </div>
 

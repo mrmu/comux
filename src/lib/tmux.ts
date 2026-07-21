@@ -149,6 +149,17 @@ export async function sendRawKeys(
   await runTmux("send-keys", "-t", `${sessionName}`, "-l", keys);
 }
 
+/** Paste text into the pane via tmux's buffer with bracketed paste (-p):
+ *  multi-line text lands in a TUI's input as one block without newlines
+ *  being interpreted as Enter — nothing gets auto-submitted. */
+export async function pasteText(
+  sessionName: string,
+  text: string
+): Promise<void> {
+  await runTmux("set-buffer", "-b", "comux-paste", text);
+  await runTmux("paste-buffer", "-p", "-b", "comux-paste", "-t", `${sessionName}`);
+}
+
 export async function sendSpecialKey(
   sessionName: string,
   key: string

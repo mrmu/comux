@@ -16,6 +16,17 @@ interface AgentSpec {
   comingSoonHint?: string;
 }
 
+// Control keys a mobile soft keyboard can't produce — rendered as a tap
+// row above the terminal bar on coarse-pointer devices.
+const QUICK_KEYS: { label: string; data: string }[] = [
+  { label: "Esc", data: "\x1b" },
+  { label: "Tab", data: "\t" },
+  { label: "↑", data: "\x1b[A" },
+  { label: "↓", data: "\x1b[B" },
+  { label: "^C", data: "\x03" },
+  { label: "⏎", data: "\r" },
+];
+
 const AGENTS: AgentSpec[] = [
   { id: "claude", label: "Claude Code", available: true },
   { id: "codex",  label: "OpenAI Codex", available: false, comingSoonHint: "transcript adapter 規劃中" },
@@ -59,6 +70,8 @@ export default function TerminalView({
   const [activeWindow, setActiveWindow] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  // Lets the quick-key row inject bytes into the live terminal WS.
+  const wsInputRef = useRef<((data: string) => void) | null>(null);
 
   // Load windows list
   const loadWindows = useCallback(async () => {
@@ -257,6 +270,14 @@ export default function TerminalView({
         }
       });
 
+      // Expose an input sender for the quick-key row. Reads `ws` at call
+      // time so it survives reconnects.
+      wsInputRef.current = (data: string) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "input", data }));
+        }
+      };
+
       // OSC 52: tmux (set-clipboard on) reports copied text as
       // "<target>;<base64>" when a mouse-drag copy completes in copy-mode.
       // Write it to the browser clipboard so drag-to-select copies for
@@ -348,6 +369,7 @@ export default function TerminalView({
       connect();
 
       cleanupRef.current = () => {
+        wsInputRef.current = null;
         document.removeEventListener("visibilitychange", onVisibility);
         touchEl.removeEventListener("touchstart", onTouchStart);
         touchEl.removeEventListener("touchmove", onTouchMove);
@@ -435,6 +457,22 @@ export default function TerminalView({
       {/* Terminal */}
       <div className="terminal-wrap">
         <div className="terminal-container" ref={containerRef} />
+      </div>
+      {/* Quick keys — keys a mobile keyboard can't type. Hidden on
+          fine-pointer devices via CSS. */}
+      <div className="terminal-quickkeys">
+        {QUICK_KEYS.map((k) => (
+          <button
+            key={k.label}
+            className="qk-btn"
+            // preventDefault keeps the terminal's focus (and the soft
+            // keyboard) from being stolen by the button tap
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => wsInputRef.current?.(k.data)}
+          >
+            {k.label}
+          </button>
+        ))}
       </div>
       <div className="terminal-bar">
         {agent ? (
