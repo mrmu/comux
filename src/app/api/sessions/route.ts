@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import * as tmux from "@/lib/tmux";
@@ -82,6 +83,15 @@ export async function POST(request: NextRequest) {
       { error: "Invalid command" },
       { status: 400 }
     );
+  }
+
+  // Make sure the working directory exists before tmux starts — `-c` with a
+  // missing path silently drops the shell into $HOME, which is exactly where
+  // an agent should NOT wake up. cwd is already validated against the
+  // allowed roots, and "empty dir = new project" is a supported flow.
+  if (cwd) {
+    try { await fs.mkdir(cwd, { recursive: true }); }
+    catch { /* permission problems surface in tmux/healthcheck */ }
   }
 
   const session = await tmux.createSession(name, command, cwd);

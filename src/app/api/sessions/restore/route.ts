@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import * as tmux from "@/lib/tmux";
@@ -29,6 +30,10 @@ export async function POST(request: NextRequest) {
     if (p.command && !isValidCommand(p.command)) { skipped.push(p.name); continue; }
 
     try {
+      // Same as session create: a missing cwd would drop the shell in $HOME
+      if (p.cwd) {
+        try { await fs.mkdir(p.cwd, { recursive: true }); } catch { /* surfaced by healthcheck */ }
+      }
       // Restore with cwd only — don't auto-execute commands
       await tmux.createSession(p.name, undefined, p.cwd || undefined);
       restored.push(p.name);
