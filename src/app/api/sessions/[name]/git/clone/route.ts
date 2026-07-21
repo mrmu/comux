@@ -67,6 +67,10 @@ export async function POST(
 
   const result = await gitClone(project.repoUrl, project.cwd);
   if (!result.ok) {
+    // The pre-clone cleanup may have removed the cwd (it held only a seeded
+    // .comux). Regenerate so a failed clone doesn't leave the project with
+    // no directory and no hosts.md.
+    await syncComuxDir(name);
     return NextResponse.json(
       { error: humanizeCloneError(result.stderr) },
       { status: 500 }
