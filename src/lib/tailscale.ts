@@ -14,6 +14,7 @@ export interface TailscaleNode {
   os: string;
   online: boolean;
   isSelf: boolean;
+  tags: string[];      // ACL tags, e.g. ["tag:pan-gcp"]
 }
 
 // macOS App Store install doesn't symlink the CLI into PATH; probe the
@@ -51,6 +52,7 @@ interface RawNode {
   OS?: string;
   Online?: boolean;
   TailscaleIPs?: string[];
+  Tags?: string[];
 }
 
 function normalize(raw: RawNode, isSelf: boolean): TailscaleNode | null {
@@ -68,6 +70,7 @@ function normalize(raw: RawNode, isSelf: boolean): TailscaleNode | null {
     os: raw.OS || "",
     online: !!raw.Online,
     isSelf,
+    tags: raw.Tags || [],
   };
 }
 

@@ -2294,3 +2294,9 @@ select {
   display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
 }
 .machine-discover-item input[type="checkbox"] { accent-color: var(--accent); }
+.machine-tag {
+  padding: 0.08rem 0.38rem; border-radius: 3px; font-size: 0.68rem;
+  background: rgba(16,185,129,0.12); color: #34d399;
+  border: 1px solid rgba(16,185,129,0.25);
+  font-family: var(--font-mono, monospace);
+}

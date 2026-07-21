@@ -10,6 +10,7 @@ function tailscaleFields(n: TailscaleNode, now: Date) {
     os: n.os,
     online: n.online,
     isSelf: n.isSelf,
+    tags: n.tags.join(","),
     source: "tailscale",
     lastSeenAt: now,
   };
@@ -104,4 +105,23 @@ export async function getSelfMachine(): Promise<{
 /** How to reach a machine over ssh: `user@hostname` or bare hostname. */
 export function sshTargetOf(m: { hostname: string; sshUser: string }): string {
   return m.sshUser ? `${m.sshUser}@${m.hostname}` : m.hostname;
+}
+
+/** Single wire format for Machine rows across all /api/machines responses. */
+export function serializeMachine(m: Machine) {
+  return {
+    id: m.id,
+    hostname: m.hostname,
+    display_name: m.displayName,
+    dns_name: m.dnsName,
+    tailscale_ip: m.tailscaleIp,
+    os: m.os,
+    ssh_user: m.sshUser,
+    tags: m.tags ? m.tags.split(",") : [],
+    note: m.note,
+    online: m.online,
+    is_self: m.isSelf,
+    source: m.source,
+    last_seen_at: m.lastSeenAt,
+  };
 }

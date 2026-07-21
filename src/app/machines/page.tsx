@@ -14,6 +14,7 @@ interface Machine {
   tailscale_ip: string;
   os: string;
   ssh_user: string;
+  tags: string[];
   note: string;
   online: boolean;
   is_self: boolean;
@@ -26,6 +27,20 @@ interface DiscoveredNode {
   os: string;
   online: boolean;
   tailscale_ip: string;
+  tags: string[];
+}
+
+/** ACL tags as-is from the tailnet (whatever naming scheme the tailnet
+ *  owner uses) — display only, comux attaches no meaning to them. */
+function TagChips({ tags }: { tags: string[] }) {
+  if (!tags?.length) return null;
+  return (
+    <>
+      {tags.map((t) => (
+        <span key={t} className="machine-tag">{t.replace(/^tag:/, "")}</span>
+      ))}
+    </>
+  );
 }
 
 export default function MachinesPage() {
@@ -195,6 +210,7 @@ export default function MachinesPage() {
                     <span className="machine-hostname">{m.hostname}</span>
                     {m.is_self && <span className="machine-self-badge">主開發機</span>}
                     {m.source === "manual" && <span className="machine-src-badge">手動</span>}
+                    <TagChips tags={m.tags} />
                     <span className="machine-meta">
                       {m.os}{m.tailscale_ip ? ` · ${m.tailscale_ip}` : ""}
                     </span>
@@ -264,6 +280,7 @@ export default function MachinesPage() {
                     />
                     <span className={`machine-dot${d.online ? " online" : ""}`} />
                     <span className="machine-hostname">{d.hostname}</span>
+                    <TagChips tags={d.tags} />
                     <span className="machine-meta">
                       {d.os}{d.tailscale_ip ? ` · ${d.tailscale_ip}` : ""}
                     </span>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { listMachines, getSelfMachine } from "@/lib/machines";
+import { listMachines, getSelfMachine, serializeMachine } from "@/lib/machines";
 import { isValidHostname, isValidSshUser } from "@/lib/validate";
 
 export async function GET(request: NextRequest) {
@@ -9,23 +9,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const [machines, self] = await Promise.all([listMachines(), getSelfMachine()]);
-  return NextResponse.json({
-    self,
-    machines: machines.map((m) => ({
-      id: m.id,
-      hostname: m.hostname,
-      display_name: m.displayName,
-      dns_name: m.dnsName,
-      tailscale_ip: m.tailscaleIp,
-      os: m.os,
-      ssh_user: m.sshUser,
-      note: m.note,
-      online: m.online,
-      is_self: m.isSelf,
-      source: m.source,
-      last_seen_at: m.lastSeenAt,
-    })),
-  });
+  return NextResponse.json({ self, machines: machines.map(serializeMachine) });
 }
 
 /** Manual add — for machines outside the tailnet (rare, but keeps the
@@ -62,5 +46,5 @@ export async function POST(request: NextRequest) {
       source: "manual",
     },
   });
-  return NextResponse.json(machine);
+  return NextResponse.json(serializeMachine(machine));
 }

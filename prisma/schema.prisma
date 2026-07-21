@@ -81,6 +81,7 @@ model Machine {
   tailscaleIp String   @default("") @map("tailscale_ip")
   os          String   @default("")
   sshUser     String   @default("") @map("ssh_user")     // default login user, e.g. "devops"
+  tags        String   @default("")                      // Tailscale ACL tags, comma-separated
   note        String   @default("")
   online      Boolean  @default(false)
   isSelf      Boolean  @default(false) @map("is_self")

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { syncMachinesFromTailscale, getSelfMachine } from "@/lib/machines";
+import { syncMachinesFromTailscale, getSelfMachine, serializeMachine } from "@/lib/machines";
 
 export async function POST(request: NextRequest) {
   if (!requireAuth(request))
@@ -19,21 +19,9 @@ export async function POST(request: NextRequest) {
         os: d.os,
         online: d.online,
         tailscale_ip: d.ip,
+        tags: d.tags,
       })),
-      machines: machines.map((m) => ({
-        id: m.id,
-        hostname: m.hostname,
-        display_name: m.displayName,
-        dns_name: m.dnsName,
-        tailscale_ip: m.tailscaleIp,
-        os: m.os,
-        ssh_user: m.sshUser,
-        note: m.note,
-        online: m.online,
-        is_self: m.isSelf,
-        source: m.source,
-        last_seen_at: m.lastSeenAt,
-      })),
+      machines: machines.map(serializeMachine),
     });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { importMachines, listMachines } from "@/lib/machines";
+import { importMachines, listMachines, serializeMachine } from "@/lib/machines";
 import { isValidHostname } from "@/lib/validate";
 
 /** Opt-in import of tailnet machines the user selected from the discover
@@ -24,20 +24,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       imported,
-      machines: machines.map((m) => ({
-        id: m.id,
-        hostname: m.hostname,
-        display_name: m.displayName,
-        dns_name: m.dnsName,
-        tailscale_ip: m.tailscaleIp,
-        os: m.os,
-        ssh_user: m.sshUser,
-        note: m.note,
-        online: m.online,
-        is_self: m.isSelf,
-        source: m.source,
-        last_seen_at: m.lastSeenAt,
-      })),
+      machines: machines.map(serializeMachine),
     });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
