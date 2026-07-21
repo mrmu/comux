@@ -73,17 +73,45 @@ export async function createSession(
   command?: string,
   cwd?: string
 ): Promise<TmuxSession> {
+  const currentPath = process.env.PATH || "";
   const args = ["new-session", "-d", "-s", name, "-x", "200", "-y", "50"];
   if (cwd) args.push("-c", cwd);
+  // Inject PATH into the pane's environment directly (tmux ≥3.2). This is
+  // the safe channel — no typing into the shell involved.
+  if (currentPath) args.push("-e", `PATH=${currentPath}`);
   // Don't pass command yet — set PATH first, then send command
-  await runTmux(...args);
+  try {
+    await runTmux(...args);
+  } catch {
+    // Older tmux without -e support — retry without it; the typed export
+    // below (when safe) and the server's inherited env still cover PATH.
+    const plain = ["new-session", "-d", "-s", name, "-x", "200", "-y", "50"];
+    if (cwd) plain.push("-c", cwd);
+    await runTmux(...plain);
+  }
 
   // Set PATH in tmux global env so sessions can find host tools (claude, git, etc.)
-  const currentPath = process.env.PATH || "";
   await runTmux("set-environment", "-g", "PATH", currentPath).catch(() => {});
 
-  // Export PATH in this session's shell
-  await runTmux("send-keys", "-t", `${name}`, `export PATH="${currentPath}"`, "Enter").catch(() => {});
+  // Mouse mode routes the browser's wheel events into tmux copy-mode, which
+  // is the only way to scroll history through a tmux attach — without it
+  // xterm.js scrolls its own (empty) buffer and the terminal appears to
+  // have no scrollback at all. history-limit applies to panes created
+  // after it's set; 50k lines ≈ a long agent session.
+  await runTmux("set-option", "-g", "mouse", "on").catch(() => {});
+  await runTmux("set-option", "-g", "history-limit", "50000").catch(() => {});
+
+  // Belt-and-suspenders: also export PATH in the shell so it wins over
+  // dotfiles that reset it — but ONLY when the line fits well inside the
+  // tty's canonical-mode limit (1024 bytes). Keystrokes land before the
+  // shell's line editor switches the tty to raw mode, and a longer line
+  // gets truncated by the tty — dropping the closing quote and leaving
+  // the shell stuck at a dquote> prompt that silently eats every command
+  // sent afterwards (including agent launches).
+  if (currentPath.length > 0 && currentPath.length < 800) {
+    await runTmux("send-keys", "-t", `${name}`, "-l", `export PATH="${currentPath}"`).catch(() => {});
+    await runTmux("send-keys", "-t", `${name}`, "Enter").catch(() => {});
+  }
 
   // Now send the actual command if provided
   if (command) {
