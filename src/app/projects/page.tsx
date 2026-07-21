@@ -54,14 +54,18 @@ export default function ProjectsPage() {
                 if (s.running) {
                   router.push(`/projects/${s.name}`);
                 } else {
+                  // Restart then enter in one click — a stopped card should
+                  // behave like a running one, just with a spin-up first.
                   (async () => {
                     try {
                       await api.post("/api/sessions", {
                         name: s.name, display_name: s.display_name,
                         cwd: s.cwd, command: s.command, color: s.color,
                       });
-                      loadSessions();
-                    } catch { /* ignore */ }
+                      router.push(`/projects/${s.name}`);
+                    } catch {
+                      loadSessions(); // restart failed — refresh so state stays honest
+                    }
                   })();
                 }
               }}>
