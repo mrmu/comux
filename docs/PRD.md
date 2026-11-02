@@ -102,8 +102,8 @@ ref: https://github.com/windmill-labs/comux 這個要做的事好像跟我們系
 curl -fsSL https://tailscale.com/install.sh | sh
 
 例如:
-sudo tailscale up --ssh --advertise-tags=tag:pan-devops
-sudo tailscale up --ssh --advertise-tags=tag:pan-gcp
+sudo tailscale up --ssh --advertise-tags=tag:your-app
+sudo tailscale up --ssh --advertise-tags=tag:your-app-gcp
 
 但有時候容器沒有立即反應，此時改為執行:
 sudo tailscale up --ssh --force-reauth

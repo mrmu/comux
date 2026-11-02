@@ -76,7 +76,7 @@ model Host {
 // on — the anchor for "you are here" in generated .comux/hosts.md.
 model Machine {
   id          Int      @id @default(autoincrement())
-  hostname    String   @unique               // MagicDNS label, e.g. "linode-audi-inv"
+  hostname    String   @unique               // MagicDNS label, e.g. "my-server"
   displayName String   @default("") @map("display_name") // Tailscale HostName as-is
   dnsName     String   @default("") @map("dns_name")     // full MagicDNS FQDN
   tailscaleIp String   @default("") @map("tailscale_ip")

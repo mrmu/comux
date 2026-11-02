@@ -14,7 +14,7 @@ export interface TailscaleNode {
   os: string;
   online: boolean;
   isSelf: boolean;
-  tags: string[];      // ACL tags, e.g. ["tag:pan-gcp"]
+  tags: string[];      // ACL tags, e.g. ["tag:your-app"]
 }
 
 // macOS App Store install doesn't symlink the CLI into PATH; probe the

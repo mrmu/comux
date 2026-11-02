@@ -216,7 +216,7 @@ export default function MachinesPage() {
                     </span>
                     <span className="machine-actions">
                       {/* 沒設 SSH 使用者前先不給測 — ssh 會用 comux 主機的執行
-                          身分（如 devops_bot）連過去，目的機器多半沒這個帳號，
+                          身分（部署帳號）連過去，目的機器多半沒這個帳號，
                           測了必失敗。設定完成按鈕才出現。 */}
                       {!m.is_self && m.ssh_user && (
                         <button className="btn-sm" onClick={() => ping(m.id)} disabled={pingBusy === m.id}>

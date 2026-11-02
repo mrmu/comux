@@ -111,7 +111,7 @@ export default function AccountPage({
           </div>
           <div className="form-row">
             <label>Local SSH Host</label>
-            <input type="text" placeholder="e.g. devops@linode-audi-inv" value={localHost} onChange={(e) => setLocalHost(e.target.value)} />
+            <input type="text" placeholder="e.g. deploy-user@your-host" value={localHost} onChange={(e) => setLocalHost(e.target.value)} />
             <p className="settings-hint">
               （舊機制）手動標記本機的 ssh 名稱。現在建議改用 Machines 頁「從 Tailscale 同步」，
               comux 會自動辨識主開發機；這欄僅供沒掛站點的舊 host 判斷本機用。

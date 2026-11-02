@@ -206,22 +206,24 @@ npm run dev
 `npm run dev` 跑兩個進程（Next.js port 3000 + WS port 3001），`dev-proxy` 容器把
 `comux.test` 流量從 nginx-proxy 轉到宿主機 port 3000
 
+> 下方為通用說明。實際主機名、SSH 帳號、安裝路徑與 Tailscale tag 記在內部部署筆記（不放公開 repo）。
+
 ## 個人專案正式機
 
 網址: https://comux.audilu.com
-已透過加入tailscale 能用以下ssh指令登入，且需要時也能用sudo su切換成管理者權限:
+已加入 Tailscale，以部署帳號透過 Tailscale SSH 登入，需要時可 `sudo su` 切換 root：
 
 ```
-devops@linode-audi-inv
+<deploy-user>@<personal-host>
 ```
 
 ## 泛科專案正式機
 
-網址: https://comux.pangogo.com（機器：`lobster-9527`，tag:pan-devops）
+網址: https://comux.pangogo.com（Tailscale 機器，帶公司部署 tag）
 
 ```
-ssh devops_bot@lobster-9527   # comux 跑在 /home/devops_bot/comux (systemd: comux.service)
-ssh root@lobster-9527         # systemctl restart comux 需要 root
+ssh <deploy-user>@<pan-host>   # comux 跑在該帳號家目錄下 (systemd: comux.service)
+ssh root@<pan-host>            # systemctl restart comux 需要 root
 ```
 
 DB 容器名為 `webmux-db-1`（歷史命名），psql 帳號/DB 皆為 `comux`。
