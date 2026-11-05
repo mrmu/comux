@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ViewportSync from "@/components/ViewportSync";
 
 export const metadata: Metadata = {
   title: "comux",
@@ -35,6 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <ViewportSync />
         <div id="app">{children}</div>
       </body>
     </html>

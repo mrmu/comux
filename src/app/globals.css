@@ -33,7 +33,12 @@ html, body {
 }
 
 #app {
-  height: 100%;
+  /* --app-height is set from window.visualViewport by <ViewportSync>, so the
+     app shrinks when the mobile soft keyboard opens instead of hiding its
+     bottom (terminal bar / quick keys / cursor line) behind the keyboard.
+     Falls back to 100% before the JS runs and on browsers without
+     visualViewport. */
+  height: var(--app-height, 100%);
   display: flex;
   flex-direction: column;
 }
@@ -2326,6 +2331,16 @@ select {
   cursor: pointer;
 }
 .qk-btn:active { background: rgba(99,102,241,0.25); }
+/* Paste / Clear — actions, not raw key sends. Tinted so they read apart from
+   the control-key buttons, and given a touch of extra width for the label. */
+.qk-action {
+  flex: 0 0 auto;
+  border-color: rgba(99,102,241,0.3);
+  background: rgba(99,102,241,0.1);
+  color: var(--accent);
+  font-family: inherit;
+}
+.qk-action:active { background: rgba(99,102,241,0.28); }
 
 /* ─── Read-only transcript footer ────────────────────────────────── */
 .chat-readonly-bar {

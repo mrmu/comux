@@ -73,6 +73,25 @@ export default function TerminalView({
   // Lets the quick-key row inject bytes into the live terminal WS.
   const wsInputRef = useRef<((data: string) => void) | null>(null);
 
+  // Mobile can't long-press the terminal to paste (xterm owns the touch
+  // surface), so surface an explicit button: read the system clipboard and
+  // type it into the PTY.
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard?.readText();
+      if (text) wsInputRef.current?.(text);
+    } catch {
+      /* clipboard blocked / no permission — nothing we can do */
+    }
+  };
+
+  // Clear the current input line. Ctrl-A (start of line) + Ctrl-K (kill to
+  // end) wipes the whole line regardless of cursor position — works in
+  // readline shells and Claude Code's TUI input alike.
+  const clearInputLine = () => {
+    wsInputRef.current?.("\x01\x0b");
+  };
+
   // Load windows list
   const loadWindows = useCallback(async () => {
     try {
@@ -190,6 +209,8 @@ export default function TerminalView({
       }, 3000);
     };
 
+    let disposeImeBridge: (() => void) | null = null;
+
     async function initTerminal() {
       const { Terminal } = await import("@xterm/xterm");
       const { FitAddon } = await import("@xterm/addon-fit");
@@ -277,6 +298,43 @@ export default function TerminalView({
           ws.send(JSON.stringify({ type: "input", data }));
         }
       };
+
+      // ── Mobile IME bridge ──────────────────────────────────────────
+      // Mobile Chinese IMEs commit numbers, latin letters and half/full-width
+      // punctuation via an `insertText` input event *preceded by a keyCode-229
+      // keydown*. xterm's _inputEvent guard `(!e.composed || !_keyDownSeen)`
+      // is false once that 229 keydown set _keyDownSeen, so it silently drops
+      // the commit — you'd have to switch to the English IME to type them.
+      // Re-forward exactly those dropped commits, without double-sending what
+      // xterm already handled (composed CJK arrives as `insertCompositionText`
+      // and is handled by xterm's compositionend — we never touch it).
+      // Coarse-pointer only, so desktop input is completely untouched.
+      const ta: HTMLTextAreaElement | undefined = terminal.textarea;
+      if (ta && window.matchMedia?.("(pointer: coarse)").matches) {
+        let keypressHandled = false;
+        const onImeKeypress = () => { keypressHandled = true; };
+        const onImeInput = (e: Event) => {
+          const ie = e as InputEvent;
+          const wasKeypress = keypressHandled;
+          keypressHandled = false;
+          if (ie.isComposing) return;                        // mid-composition
+          if (ie.inputType !== "insertText" || !ie.data) return;
+          if (ie.defaultPrevented) return; // xterm._inputEvent already sent it
+          if (wasKeypress) return;         // a physical-keyboard keypress sent it
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "input", data: ie.data }));
+          }
+          // xterm only clears its hidden textarea for input it handled itself;
+          // wipe the commit we just consumed so it doesn't accumulate there.
+          ta.value = "";
+        };
+        ta.addEventListener("keypress", onImeKeypress, true);
+        ta.addEventListener("input", onImeInput, false);
+        disposeImeBridge = () => {
+          ta.removeEventListener("keypress", onImeKeypress, true);
+          ta.removeEventListener("input", onImeInput, false);
+        };
+      }
 
       // OSC 52: tmux (set-clipboard on) reports copied text as
       // "<target>;<base64>" when a mouse-drag copy completes in copy-mode.
@@ -370,6 +428,7 @@ export default function TerminalView({
 
       cleanupRef.current = () => {
         wsInputRef.current = null;
+        disposeImeBridge?.();
         document.removeEventListener("visibilitychange", onVisibility);
         touchEl.removeEventListener("touchstart", onTouchStart);
         touchEl.removeEventListener("touchmove", onTouchMove);
@@ -461,6 +520,20 @@ export default function TerminalView({
       {/* Quick keys — keys a mobile keyboard can't type. Hidden on
           fine-pointer devices via CSS. */}
       <div className="terminal-quickkeys">
+        <button
+          className="qk-btn qk-action"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={pasteFromClipboard}
+        >
+          貼上
+        </button>
+        <button
+          className="qk-btn qk-action"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={clearInputLine}
+        >
+          清除
+        </button>
         {QUICK_KEYS.map((k) => (
           <button
             key={k.label}
