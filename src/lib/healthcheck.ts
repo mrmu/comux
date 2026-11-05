@@ -106,7 +106,7 @@ export async function runHealthChecks(input: HealthCheckInput): Promise<HealthCh
     "Claude Code CLI 在 PATH",
     "claude",
     ["--version"],
-    "在主機上：npm install -g @anthropic-ai/claude-code"
+    "在主機上：curl -fsSL https://claude.ai/install.sh | bash（裝到 ~/.local/bin，重啟 comux 後會自動加進 PATH）"
   ));
 
   // 6) tmux present (terminal feature depends on it)

@@ -51,7 +51,7 @@ export async function POST(
     await execFileAsync("which", [binary], { timeout: 3000 });
   } catch {
     return NextResponse.json(
-      { error: `${label} CLI 沒裝（找不到 \`${binary}\`）。請先在主機上 npm install -g ... 後重試。` },
+      { error: `${label} CLI 沒裝（找不到 \`${binary}\`）。請先在主機上安裝（裝在 ~/.local/bin 也可以），然後重啟 comux 再試。` },
       { status: 400 }
     );
   }

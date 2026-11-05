@@ -11,6 +11,22 @@ const dir = path.join(__dirname);
 process.env.NODE_ENV = "production";
 process.chdir(__dirname);
 
+// systemd gives us a bare PATH (/usr/local/bin:/usr/bin:...), but per-user
+// CLI installs live under $HOME — notably Claude Code's native installer
+// (~/.local/bin/claude). Prepend the ones that exist so `which claude` in the
+// API routes and the PATH we inject into new tmux panes can both find them.
+{
+  const fs = require("fs");
+  const home = process.env.HOME || require("os").homedir();
+  const current = (process.env.PATH || "").split(":").filter(Boolean);
+  const extra = [
+    path.join(home, ".local", "bin"),
+    path.join(home, ".npm-global", "bin"),
+    path.join(home, ".bun", "bin"),
+  ].filter((p) => !current.includes(p) && fs.existsSync(p));
+  if (extra.length) process.env.PATH = [...extra, ...current].join(":");
+}
+
 const currentPort = parseInt(process.env.PORT, 10) || 3000;
 const hostname = process.env.HOSTNAME || "0.0.0.0";
 
