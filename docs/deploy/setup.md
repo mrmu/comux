@@ -90,6 +90,9 @@ PROJECTS_ROOT=/home/deploy/projects
 # 監聽位址（預設就是 127.0.0.1；寫出來提醒自己不要改成 0.0.0.0）
 HOSTNAME=127.0.0.1
 
+# Tailscale Serve 從本機連進來：信任 loopback 的 X-Forwarded-For（登入限流才分得出裝置）
+TRUSTED_PROXIES=127.0.0.1,::1
+
 # WS / CSRF origin allowlist：Tailscale Serve 的 MagicDNS 名稱
 ALLOWED_ORIGINS=your-host.your-tailnet.ts.net,localhost
 

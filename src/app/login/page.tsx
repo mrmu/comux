@@ -90,7 +90,8 @@ export default function LoginPage() {
           )}
           <input type="email" placeholder="Email" required value={email}
             onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-          <input type="password" placeholder="Password" required minLength={6}
+          <input type="password" placeholder="Password" required
+            minLength={isFirstUser ? 12 : undefined}
             value={password} onChange={(e) => setPassword(e.target.value)}
             autoComplete={isFirstUser ? "new-password" : "current-password"} />
           {isFirstUser && (

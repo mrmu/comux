@@ -6,6 +6,8 @@ import { prisma } from "./db";
 import { getComuxSecret } from "../../server-shared/comux-secret";
 
 const COOKIE_NAME = "comux_token";
+// 只套用在新設定的密碼（註冊、新增使用者、改密碼）；既有密碼照常可登入
+export const MIN_PASSWORD_LENGTH = 12;
 
 interface JwtPayload {
   userId: number;
@@ -65,7 +67,8 @@ export async function login(
 
 function validateNewAccount(email: string, password: string): string | null {
   if (!email || !email.includes("@")) return "Invalid email";
-  if (password.length < 6) return "Password must be at least 6 characters";
+  if (password.length < MIN_PASSWORD_LENGTH)
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
   return null;
 }
 

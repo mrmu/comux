@@ -110,7 +110,13 @@ async function main() {
     res.end("Starting...");
   };
 
+  // 可信來源位址：刪掉外部傳入的 x-comux-client-ip，改由 socket 位址
+  // （或 TRUSTED_PROXIES 轉送的 X-Forwarded-For）決定，給登入限流用
+  const { applyClientIpHeader, markClientIpHeaderTrusted } = require("./server-shared/client-ip");
+  markClientIpHeaderTrusted();
+
   const server = http.createServer((req, res) => {
+    applyClientIpHeader(req);
     requestHandler(req, res);
   });
 

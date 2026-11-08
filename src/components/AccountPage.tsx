@@ -136,7 +136,7 @@ export default function AccountPage({
             <div className="form-row">
               <label>New Password</label>
               <div className="form-input-group">
-                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} required minLength={6} />
+                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} required minLength={12} />
                 <button className="btn-sm" type="submit" disabled={pwSaving}>{pwSaving ? "..." : "Update"}</button>
               </div>
               {pwMsg && <p className={pwMsg.includes("updated") ? "msg-ok" : "msg-err"}>{pwMsg}</p>}
@@ -167,7 +167,7 @@ export default function AccountPage({
             <div className="form-row-inline">
               <input type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
               <input type="text" placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} />
-              <input type="password" placeholder="Password" value={newUserPw} onChange={(e) => setNewUserPw(e.target.value)} required minLength={6} />
+              <input type="password" placeholder="Password" value={newUserPw} onChange={(e) => setNewUserPw(e.target.value)} required minLength={12} />
               <button className="btn-sm" type="submit">Add</button>
             </div>
             {addMsg && <p className={addMsg.includes("created") ? "msg-ok" : "msg-err"}>{addMsg}</p>}

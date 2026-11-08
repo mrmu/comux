@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { MIN_PASSWORD_LENGTH } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getComuxSecret } from "../../../../../server-shared/comux-secret";
@@ -19,8 +20,11 @@ export async function PUT(request: NextRequest) {
   const body = await request.json();
   const { currentPassword, newPassword } = body;
 
-  if (!newPassword || newPassword.length < 6) {
-    return NextResponse.json({ error: "New password must be at least 6 characters" }, { status: 400 });
+  if (typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD_LENGTH) {
+    return NextResponse.json(
+      { error: `New password must be at least ${MIN_PASSWORD_LENGTH} characters` },
+      { status: 400 }
+    );
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });

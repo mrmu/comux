@@ -131,7 +131,8 @@ docs/deploy/        # Deployment guide
 - CWD 限制在 projectsRoot (DB setting) 內
 - Command 驗證：拒絕 shell metacharacters
 - WebSocket origin allowlist (ALLOWED_ORIGINS env)
-- Login rate limit (5/min per IP)
+- Login rate limit：來源位址 5 次/分（socket 位址；只有 TRUSTED_PROXIES 才採 X-Forwarded-For）＋ 帳號 15 分鐘失敗 10 次
+- 新設定的密碼至少 12 字元
 - Cookie: httpOnly + sameSite:strict + secure (prod)
 - 首個用戶註冊需帶一次性 setup token（啟動時印在 log 或 `COMUX_SETUP_TOKEN`），之後只能由已登入者建帳號
 - Restore 不自動執行 DB 中的 command
