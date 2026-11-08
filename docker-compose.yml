@@ -27,7 +27,7 @@ services:
     build:
       context: .
       target: builder
-    command: sh -c "npx prisma db push"
+    command: sh -c "npx prisma migrate deploy"
     environment:
       DATABASE_URL: postgresql://comux:${POSTGRES_PASSWORD:-comux}@db:5432/comux?schema=public
     depends_on:

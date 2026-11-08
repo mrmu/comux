@@ -4,7 +4,7 @@ import { getSelfMachine } from "@/lib/machines";
 
 /** Lightweight "which machine am I on" for the header badge. */
 export async function GET(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   return NextResponse.json(await getSelfMachine());

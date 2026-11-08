@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import * as cf from "@/lib/cloudflare";
 
 export async function GET(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   if (!cf.isConfigured()) {
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   if (!cf.isConfigured()) {

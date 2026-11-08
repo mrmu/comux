@@ -55,7 +55,7 @@ function serialize(issue: {
 }
 
 export async function GET(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = request.nextUrl;
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const actor = getCurrentUserEmail(request);

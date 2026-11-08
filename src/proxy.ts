@@ -9,10 +9,14 @@ function jwtKey(): Uint8Array {
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/register", "/api/auth/check"];
 
+/**
+ * 這裡只驗簽章與欄位形狀（proxy 不查 DB）。tokenVersion 是否仍有效由 API 的
+ * requireAuth 與 WebSocket 驗證查 DB 比對；沒有 tv 欄位的舊格式 token 直接擋掉。
+ */
 async function isValidToken(token: string): Promise<boolean> {
   try {
-    await jwtVerify(token, jwtKey());
-    return true;
+    const { payload } = await jwtVerify(token, jwtKey(), { algorithms: ["HS256"] });
+    return typeof payload.userId === "number" && typeof payload.tv === "number";
   } catch {
     return false;
   }

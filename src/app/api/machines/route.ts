@@ -5,7 +5,7 @@ import { listMachines, getSelfMachine, serializeMachine } from "@/lib/machines";
 import { isValidHostname, isValidSshUser } from "@/lib/validate";
 
 export async function GET(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const [machines, self] = await Promise.all([listMachines(), getSelfMachine()]);
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 /** Manual add — for machines outside the tailnet (rare, but keeps the
  *  registry complete when e.g. a legacy VM is reached via plain ssh). */
 export async function POST(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();

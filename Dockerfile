@@ -28,9 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl tmux git curl bash openssh-client python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Install prod-server runtime deps (ws, node-pty, jsonwebtoken)
+# Install prod-server runtime deps (ws, node-pty, jsonwebtoken, pg — WS 驗證要查 DB)
 RUN npm init -y > /dev/null 2>&1 && \
-    npm install --omit=dev ws node-pty@1.0.0 jsonwebtoken 2>/dev/null | tail -1
+    npm install --omit=dev ws node-pty@1.0.0 jsonwebtoken pg 2>/dev/null | tail -1
 
 # Remove build tools after native compile
 RUN apt-get purge -y python3 make g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* || true

@@ -15,25 +15,10 @@ function isValidSessionName(name: string): boolean {
   return name.length > 0 && name.length <= 100 && SAFE_NAME_RE.test(name);
 }
 
-// ─── Auth (JWT) ────────────────────────────────────────────────────
+// ─── Auth (JWT + DB tokenVersion) ──────────────────────────────────
 
-import jwt from "jsonwebtoken";
-import { getComuxSecret } from "./server-shared/comux-secret";
-
-function verifyToken(token: string): boolean {
-  try {
-    jwt.verify(token, getComuxSecret());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function getCookieValue(header: string | undefined, name: string): string | null {
-  if (!header) return null;
-  const match = header.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
-  return match ? match[1] : null;
-}
+// 與 prod-server.js 共用：驗簽章後查 DB 比對 tokenVersion（同 API 的 requireAuth）
+import { verifySessionToken, getCookieValue } from "./server-shared/ws-guard";
 
 // ─── Allowed origins ───────────────────────────────────────────────
 
@@ -58,7 +43,7 @@ function isOriginAllowed(origin: string | undefined): boolean {
 export function setupWebSocket(server: HttpServer) {
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on("upgrade", (request: IncomingMessage, socket, head) => {
+  server.on("upgrade", async (request: IncomingMessage, socket, head) => {
     const { pathname } = parse(request.url || "", true);
 
     if (pathname && pathname.startsWith("/ws/terminal/")) {
@@ -69,13 +54,14 @@ export function setupWebSocket(server: HttpServer) {
         return;
       }
 
-      // Auth check
+      // Auth check（查 DB，所以是非同步；等待期間 socket 可能已被關掉）
       const token = getCookieValue(request.headers.cookie, "comux_token");
-      if (!token || !verifyToken(token)) {
+      if (!(await verifySessionToken(token))) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
         return;
       }
+      if (socket.destroyed) return;
 
       // Parse and validate session name
       const parts = pathname.replace("/ws/terminal/", "").split("/");

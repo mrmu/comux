@@ -6,7 +6,7 @@ import { isValidHostname } from "@/lib/validate";
 /** Opt-in import of tailnet machines the user selected from the discover
  *  list. Only hostnames actually present in the live tailnet get created. */
 export async function POST(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();

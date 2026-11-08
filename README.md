@@ -82,7 +82,7 @@ cp .env.example .env && nano .env
 # Build + 起 DB
 npm ci && npm run build
 docker compose -f docker-compose.yml -f docker-compose.production.yml up -d db
-npm run db:push
+npm run db:deploy   # prisma migrate deploy
 
 # 用 systemd 管 comux 本體（只聽 127.0.0.1:3000）
 sudo cp docs/deploy/comux.service /etc/systemd/system/
@@ -98,8 +98,9 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:3000
 ### 更新
 
 ```bash
-cd ~/comux && git pull && npm ci && npm run build
+cd ~/comux && git pull && npm ci && npm run build && npm run db:deploy
 sudo systemctl restart comux
+# 舊版（用 db:push 建的 DB）第一次升級前先跑一次：npx prisma migrate resolve --applied 0_init
 # tmux session 不受影響（它是獨立 daemon）
 ```
 

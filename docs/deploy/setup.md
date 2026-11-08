@@ -115,11 +115,11 @@ docker compose -f docker-compose.yml -f docker-compose.production.yml up -d db
 docker ps | grep postgres
 ```
 
-## 6. Push DB schema
+## 6. 建立 DB schema
 
 ```bash
 cd ~/comux
-npm run db:push
+npm run db:deploy   # = npx prisma migrate deploy
 ```
 
 ## 7. systemd 管理 comux
@@ -175,9 +175,24 @@ cd ~/comux
 git pull
 npm ci
 npm run build
+npm run db:deploy   # 套用新的 migration（= npx prisma migrate deploy）
 sudo systemctl restart comux
 # tmux session 不受影響（獨立 daemon）
 ```
+
+### 從 `db push` 時代升級（一次性 baseline）
+
+早期版本沒有 migration 歷史，是用 `npm run db:push` 同步 schema。這類既有 DB
+第一次跑 `migrate deploy` 會出現 `P3005 The database schema is not empty`，
+先把初始 migration 標記為已套用，再 deploy：
+
+```bash
+npx prisma migrate resolve --applied 0_init
+npm run db:deploy
+```
+
+（`0_init` 等同 `db push` 時代的完整 schema；之後的 migration，例如
+`users.token_version`，才會實際執行。）
 
 ## 常用 debug
 

@@ -12,19 +12,28 @@ export const MIN_PASSWORD_LENGTH = 12;
 interface JwtPayload {
   userId: number;
   email: string;
+  /** 對應 User.tokenVersion；不符（或沒有這個欄位的舊 token）一律視為失效 */
+  tv: number;
 }
 
 // ─── Token management ──────────────────────────────────────────────
 
-function generateToken(user: { id: number; email: string }): string {
-  return jwt.sign({ userId: user.id, email: user.email }, getComuxSecret(), {
-    expiresIn: "7d",
-  });
+function generateToken(user: { id: number; email: string; tokenVersion: number }): string {
+  return jwt.sign(
+    { userId: user.id, email: user.email, tv: user.tokenVersion },
+    getComuxSecret(),
+    { algorithm: "HS256", expiresIn: "7d" }
+  );
 }
 
+/** 只驗簽章與欄位形狀，不查 DB。 */
 function verifyToken(token: string): JwtPayload | null {
   try {
-    return jwt.verify(token, getComuxSecret()) as JwtPayload;
+    const payload = jwt.verify(token, getComuxSecret(), {
+      algorithms: ["HS256"],
+    }) as Partial<JwtPayload>;
+    if (typeof payload.userId !== "number" || typeof payload.tv !== "number") return null;
+    return payload as JwtPayload;
   } catch {
     return null;
   }
@@ -38,18 +47,59 @@ function getTokenFromRequest(request: NextRequest): string | null {
   return null;
 }
 
-// ─── Public API ────────────────────────────────────────────────────
-
-export function requireAuth(request: NextRequest): boolean {
-  const token = getTokenFromRequest(request);
-  if (!token) return false;
-  return verifyToken(token) !== null;
+/**
+ * 驗簽章後再查 DB：使用者還在、且 tokenVersion 與 JWT 內的 tv 相同才算有效。
+ * DB 錯誤一律視為無效（fail-closed）。
+ */
+async function verifySession(token: string): Promise<JwtPayload | null> {
+  const payload = verifyToken(token);
+  if (!payload) return null;
+  const user = await prisma.user
+    .findUnique({ where: { id: payload.userId }, select: { tokenVersion: true } })
+    .catch(() => null);
+  if (!user || user.tokenVersion !== payload.tv) return null;
+  return payload;
 }
 
+// ─── Public API ────────────────────────────────────────────────────
+
+export async function requireAuth(request: NextRequest): Promise<boolean> {
+  return (await getAuthenticatedUser(request)) !== null;
+}
+
+/** 回傳已驗證（含 DB tokenVersion 比對）的 JWT payload，失敗回 null。 */
+export async function getAuthenticatedUser(
+  request: NextRequest
+): Promise<JwtPayload | null> {
+  const token = getTokenFromRequest(request);
+  if (!token) return null;
+  return verifySession(token);
+}
+
+/** 只解出 email 當操作者記錄用；呼叫前必須已經通過 requireAuth。 */
 export function getCurrentUserEmail(request: NextRequest): string {
   const token = getTokenFromRequest(request);
   if (!token) return "";
   return verifyToken(token)?.email || "";
+}
+
+/**
+ * 遞增使用者的 tokenVersion，讓該使用者所有已簽發的 token 立即失效。
+ * 回傳新的 user（用來替目前的連線重新簽 token），找不到回 null。
+ */
+export async function revokeUserSessions(userId: number) {
+  return prisma.user
+    .update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+      select: { id: true, email: true, tokenVersion: true },
+    })
+    .catch(() => null);
+}
+
+/** 用新的 tokenVersion 重新簽一張 token（例如改密碼後讓目前裝置維持登入）。 */
+export function issueToken(user: { id: number; email: string; tokenVersion: number }): string {
+  return generateToken(user);
 }
 
 export async function login(
@@ -137,7 +187,7 @@ export async function checkAuth(): Promise<{
   const token = cookieStore.get(COOKIE_NAME)?.value;
 
   if (token) {
-    const payload = verifyToken(token);
+    const payload = await verifySession(token);
     if (payload) {
       const user = await prisma.user
         .findUnique({ where: { id: payload.userId }, select: { email: true, name: true } })

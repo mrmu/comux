@@ -8,6 +8,7 @@
     "start": "NODE_ENV=production npx tsx server.ts",
     "lint": "eslint",
     "db:migrate": "npx prisma migrate dev",
+    "db:deploy": "npx prisma migrate deploy",
     "db:push": "npx prisma db push",
     "db:generate": "npx prisma generate",
     "postinstall": "test -f prisma/schema.prisma && npx prisma generate || true"

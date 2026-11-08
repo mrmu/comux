@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { getSetting, setSetting } from "@/lib/settings";
 
 export async function GET(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const projectsRoot = await getSetting("projectsRoot");
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();

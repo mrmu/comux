@@ -42,23 +42,8 @@ process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 
 // ─── Auth ──────────────────────────────────────────────────────────
 
-const jwt = require("jsonwebtoken");
-const { getComuxSecret } = require("./server-shared/comux-secret");
-
-function verifyToken(token) {
-  try {
-    jwt.verify(token, getComuxSecret());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function getCookieValue(header, name) {
-  if (!header) return null;
-  const m = header.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
-  return m ? m[1] : null;
-}
+// JWT 簽章 + DB tokenVersion 比對（與 API 的 requireAuth 相同規則）
+const { verifySessionToken, getCookieValue } = require("./server-shared/ws-guard");
 
 // ─── PTY terminal handler ──────────────────────────────────────────
 
@@ -130,7 +115,7 @@ async function main() {
       .split(",").map((o) => o.trim().toLowerCase())
   );
 
-  server.on("upgrade", (request, socket, head) => {
+  server.on("upgrade", async (request, socket, head) => {
     const { pathname } = parse(request.url || "", true);
 
     if (pathname && pathname.startsWith("/ws/terminal/")) {
@@ -151,13 +136,14 @@ async function main() {
         }
       }
 
-      // Auth check
+      // Auth check（查 DB，所以是非同步；等待期間 socket 可能已被關掉）
       const token = getCookieValue(request.headers.cookie, "comux_token");
-      if (!token || !verifyToken(token)) {
+      if (!(await verifySessionToken(token))) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
         return;
       }
+      if (socket.destroyed) return;
 
       // Validate session name
       const parts = pathname.replace("/ws/terminal/", "").split("/");

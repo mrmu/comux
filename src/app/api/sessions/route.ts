@@ -7,7 +7,7 @@ import { isValidSessionName, isValidCwd, isValidCommand } from "@/lib/validate";
 import { getProjectsRoot, getAllowedCwdRoots } from "@/lib/settings";
 
 export async function GET(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Get live tmux sessions
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();

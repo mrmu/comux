@@ -59,6 +59,8 @@ npm run dev
 # 首次使用會要求建立 admin 帳號 + 設定專案目錄（setup token 印在 npm run dev 的輸出）
 ```
 
+- 既有的本機 DB 若是以前用 `db:push` 建的，先 `npx prisma migrate resolve --applied 0_init`
+  再 `npm run db:deploy`（或繼續用 `npm run db:push`）；直接跑 `db:migrate` 會因沒有歷史而要求重置 DB
 - `npm run dev` 跑兩個進程：Next.js (port 3000) + terminal WebSocket (port 3001)
 - `dev-proxy` (socat) 讓 nginx-proxy 把 comux.test 轉到 host 的 port 3000
 
@@ -83,8 +85,9 @@ npm run dev
 npm run dev          # Dev: Next.js + WS server (host tmux)
 npm run build        # Production build (prisma generate + next build)
 npm start            # Local prod-mode smoke test (tsx server.ts) — 正式機用 prod-server.js + systemd
-npm run db:push      # Push schema to DB
-npm run db:migrate   # Run migrations
+npm run db:migrate   # Dev: 改 schema 後建立新的 migration (prisma migrate dev)
+npm run db:deploy    # Prod: 套用 migration (prisma migrate deploy)
+npm run db:push      # 不建 migration 直接同步 schema（僅限丟棄式的本機 DB）
 ```
 
 ## Project Structure
@@ -118,7 +121,7 @@ docs/deploy/        # Deployment guide
 
 ## DB Schema
 
-- **User**: email (unique), password (bcrypt), name
+- **User**: email (unique), password (bcrypt), name, tokenVersion（JWT 的 `tv`；改密碼／登出／刪除時遞增讓舊 token 失效）
 - **Setting**: key-value store (projectsRoot, etc.)
 - **Project**: name, displayName, color, cwd, command, jsonlSessionId
 - **Machine**: Tailscale 站點註冊表 — hostname (MagicDNS label, unique), sshUser, online, isSelf (comux 主開發機), source (tailscale/manual)。同步 (`tailscale status --json`) 只更新已納管站點＋self；tailnet 其他機器需在 Machines 頁勾選「納管」才會入庫（共用 tailnet 時避免公司 comux 看見個人站點）
@@ -134,6 +137,7 @@ docs/deploy/        # Deployment guide
 - Login rate limit：來源位址 5 次/分（socket 位址；只有 TRUSTED_PROXIES 才採 X-Forwarded-For）＋ 帳號 15 分鐘失敗 10 次
 - 新設定的密碼至少 12 字元
 - Cookie: httpOnly + sameSite:strict + secure (prod)
+- Session 可撤銷：API 的 requireAuth 與 WebSocket 驗證都查 DB 比對 tokenVersion（proxy.ts 只驗簽章）
 - 首個用戶註冊需帶一次性 setup token（啟動時印在 log 或 `COMUX_SETUP_TOKEN`），之後只能由已登入者建帳號
 - Restore 不自動執行 DB 中的 command
 

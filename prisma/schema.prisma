@@ -12,6 +12,8 @@ model User {
   email     String   @unique
   password  String   // bcrypt hash
   name      String   @default("")
+  // JWT 內帶這個版本號；改密碼、登出、刪除時遞增 → 舊 token 立即失效
+  tokenVersion Int    @default(0) @map("token_version")
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("users")

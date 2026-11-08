@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { syncMachinesFromTailscale, getSelfMachine, serializeMachine } from "@/lib/machines";
 
 export async function POST(request: NextRequest) {
-  if (!requireAuth(request))
+  if (!(await requireAuth(request)))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
