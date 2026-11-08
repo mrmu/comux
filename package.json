@@ -25,13 +25,13 @@
     "dotenv": "^17.4.2",
     "jose": "^6.2.2",
     "jsonwebtoken": "^9.0.3",
-    "next": "16.2.4",
+    "next": "16.4.5",
     "node-pty": "^1.0.0",
     "pg": "^8.20.0",
     "prisma": "^7.7.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "ws": "^8.20.0"
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -42,7 +42,7 @@
     "@types/react-dom": "^19",
     "@types/ws": "^8.18.1",
     "eslint": "^9",
-    "eslint-config-next": "16.2.4",
+    "eslint-config-next": "16.4.5",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
