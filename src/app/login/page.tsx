@@ -8,6 +8,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [projectsRoot, setProjectsRoot] = useState("/var/docker-www/wp-proxy-sites");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -35,7 +36,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (isFirstUser) {
-        await api.post("/api/auth/register", { email, password, name, projectsRoot });
+        await api.post("/api/auth/register", { email, password, name, projectsRoot, setupToken });
       } else {
         await api.post("/api/auth/login", { email, password });
       }
@@ -72,6 +73,17 @@ export default function LoginPage() {
           {isFirstUser ? "Create admin account" : "Sign in to continue"}
         </p>
         <form className="login-form" onSubmit={handleSubmit}>
+          {isFirstUser && (
+            <>
+              {/* 第一個管理員必須帶伺服器啟動時印在 log 的 setup token */}
+              <input type="password" placeholder="Setup token (see server log)" required
+                value={setupToken} onChange={(e) => setSetupToken(e.target.value)}
+                autoComplete="one-time-code" />
+              <p className="login-hint">
+                Find it in the server log, e.g. <code>journalctl -u comux</code>
+              </p>
+            </>
+          )}
           {isFirstUser && (
             <input type="text" placeholder="Name" value={name}
               onChange={(e) => setName(e.target.value)} autoComplete="name" />

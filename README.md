@@ -92,6 +92,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now comux
 sudo tailscale serve --bg --https=443 http://127.0.0.1:3000
 
 # 用 tailnet 內的裝置開 https://your-host.your-tailnet.ts.net，第一次會請你建 admin 帳號
+# （需輸入 comux 啟動時印在 log 的 setup token：sudo journalctl -u comux | grep -A3 "setup token"）
 ```
 
 ### 更新

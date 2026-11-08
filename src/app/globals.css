@@ -226,6 +226,8 @@ select {
 .login-form button:hover { background: var(--accent-hover); }
 
 .error-text { color: var(--danger); font-size: 0.85rem; text-align: center; }
+.login-hint { color: var(--text-dim); font-size: 0.8rem; margin: -0.25rem 0 0; }
+.login-hint code { font-size: 0.8rem; }
 
 /* ─── Top Bar ────────────────────────────────────────────────────── */
 .top-bar {

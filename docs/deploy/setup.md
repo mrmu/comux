@@ -158,6 +158,11 @@ curl -I https://your-host.your-tailnet.ts.net
 用已登入 Tailscale 的裝置開 `https://your-host.your-tailnet.ts.net`，
 建 admin 帳號 → 專案 → Terminal 輸入 `claude`。
 
+建立第一個 admin 帳號需要 **setup token**：系統裡還沒有任何使用者時，comux 啟動會把
+一次性的 token 印在 log（`sudo journalctl -u comux | grep -A3 "setup token"`），
+註冊頁要填這個值。也可以在 `.env` 預先設 `COMUX_SETUP_TOKEN=<至少 16 字元的隨機值>`。
+第一個帳號建立後 token 立即作廢，之後的帳號只能由已登入的使用者在帳號頁新增。
+
 ---
 
 ## 更新 comux

@@ -56,7 +56,7 @@ docker compose up -d db dev-proxy
 npm run dev
 
 # 開啟 http://comux.test
-# 首次使用會要求建立 admin 帳號 + 設定專案目錄
+# 首次使用會要求建立 admin 帳號 + 設定專案目錄（setup token 印在 npm run dev 的輸出）
 ```
 
 - `npm run dev` 跑兩個進程：Next.js (port 3000) + terminal WebSocket (port 3001)
@@ -133,7 +133,7 @@ docs/deploy/        # Deployment guide
 - WebSocket origin allowlist (ALLOWED_ORIGINS env)
 - Login rate limit (5/min per IP)
 - Cookie: httpOnly + sameSite:strict + secure (prod)
-- 首個用戶自助註冊，之後只能管理員建帳號
+- 首個用戶註冊需帶一次性 setup token（啟動時印在 log 或 `COMUX_SETUP_TOKEN`），之後只能由已登入者建帳號
 - Restore 不自動執行 DB 中的 command
 
 ## 每次修改都要先測試，前後端都要，然後確認功能正常。

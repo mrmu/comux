@@ -63,18 +63,20 @@ export async function login(
   return generateToken(user);
 }
 
+function validateNewAccount(email: string, password: string): string | null {
+  if (!email || !email.includes("@")) return "Invalid email";
+  if (password.length < 6) return "Password must be at least 6 characters";
+  return null;
+}
+
 export async function register(
   email: string,
   password: string,
   name?: string
 ): Promise<{ token: string } | { error: string }> {
   const normalized = email.toLowerCase().trim();
-  if (!normalized || !normalized.includes("@")) {
-    return { error: "Invalid email" };
-  }
-  if (password.length < 6) {
-    return { error: "Password must be at least 6 characters" };
-  }
+  const invalid = validateNewAccount(normalized, password);
+  if (invalid) return { error: invalid };
 
   const existing = await prisma.user
     .findUnique({ where: { email: normalized } })
@@ -91,12 +93,43 @@ export async function register(
   return { token: generateToken(user) };
 }
 
+// pg_advisory_xact_lock 的鍵：任意固定值，只用來讓「建立第一個使用者」互斥
+const FIRST_USER_LOCK_KEY = 72_635_001;
+
+/**
+ * 建立第一個管理員。在 transaction 內先拿 advisory lock 再數一次使用者，
+ * 確保兩個請求同時進來時只有一個會成功（另一個會看到 count > 0 而被拒）。
+ * 任何 DB 錯誤都往外丟，由呼叫端一律拒絕（fail-closed）。
+ */
+export async function registerFirstUser(
+  email: string,
+  password: string,
+  name?: string
+): Promise<{ token: string } | { error: string; status: number }> {
+  const normalized = email.toLowerCase().trim();
+  const invalid = validateNewAccount(normalized, password);
+  if (invalid) return { error: invalid, status: 400 };
+
+  const hash = await bcrypt.hash(password, 12);
+  const user = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${FIRST_USER_LOCK_KEY})`;
+    if ((await tx.user.count()) > 0) return null;
+    return tx.user.create({
+      data: { email: normalized, password: hash, name: name || "" },
+    });
+  });
+  if (!user) return { error: "Registration disabled. Contact admin.", status: 403 };
+
+  return { token: generateToken(user) };
+}
+
 export async function checkAuth(): Promise<{
   authenticated: boolean;
   user: { email: string; name: string } | null;
   hasUsers: boolean;
 }> {
-  const userCount = await prisma.user.count().catch(() => 0);
+  // DB 錯誤時當作「已有使用者」：前端只會顯示登入表單，不會引導去註冊
+  const userCount = await prisma.user.count().catch(() => 1);
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
 
