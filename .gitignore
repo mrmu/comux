@@ -49,3 +49,13 @@ src/generated/
 
 # playwright mcp output
 .playwright-mcp/
+
+# 個人筆記，可能含未整理的憑證或內部資訊，不進版控
+NOTE.md
+ISSUES.md
+
+# 內部搬遷交接文件(含主機/IP/弱點,不進公開 repo)
+docs/migration/
+
+# next dev 殘留檔(已於 e876a2e 關閉自動產生),agent 說明統一用 CLAUDE.md
+AGENTS.md
