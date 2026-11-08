@@ -17,7 +17,8 @@ assertComuxSecretOrExit("comux");
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
-const hostname = process.env.HOSTNAME || "0.0.0.0";
+// 預設只聽 loopback，對外一律經 Tailscale Serve 等本機反向代理；必要時用 HOSTNAME 覆寫
+const hostname = process.env.HOSTNAME || "127.0.0.1";
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -30,7 +31,7 @@ app.prepare().then(() => {
 
   setupWebSocket(server);
 
-  server.listen(port, () => {
+  server.listen(port, hostname, () => {
     console.log(`> comux ready on http://${hostname}:${port}`);
   });
 });

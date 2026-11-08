@@ -4,36 +4,34 @@
 
 ```
 Linux Host (VPS)
-├── dev user (e.g. devops)
+├── dev user (e.g. deploy)
 │   ├── tmux server          ← session 持久化
 │   ├── Claude Code CLI      ← Max Plan 登入
-│   ├── Node.js + comux      ← systemd 管理，佔 port 3000
+│   ├── Node.js + comux      ← systemd 管理，只聽 127.0.0.1:3000
 │   └── ~/.claude/           ← 認證 + 設定
 │
+├── Tailscale Serve          ← tailnet 內 HTTPS:443 → http://127.0.0.1:3000
+│                              （公網完全看不到 comux）
 └── Docker
-    ├── PostgreSQL           ← 專案 metadata + 用戶帳號
-    └── comux-proxy          ← socat: wp-proxy network → host:3000
-                               (讓 nginx-proxy + acme-companion 看到
-                                VIRTUAL_HOST / LETSENCRYPT_HOST 自動簽憑證)
+    └── PostgreSQL           ← 專案 metadata + 用戶帳號（只綁 127.0.0.1:5432）
 ```
 
 comux 本身**不跑在容器裡** — 直接在宿主機用 `systemd` 管理。
 容器版本的舊部署因為要假冒 host user (UID/GID mount + pid:host + home mount)
 太脆弱，Claude Code 或路徑變動容易整個壞掉，所以全砍。
 
-Docker 只剩兩件事：
-
-1. 跑 PostgreSQL
-2. 提供一個薄薄的 socat 容器註冊 `VIRTUAL_HOST` 給 nginx-proxy，讓 SSL 自動續
+> **comux 等於這台主機的網頁 shell。** 只透過 Tailscale Serve（或其他只在私有網路
+> 可達的反向代理）存取，不要直接開到公網。舊的 nginx-proxy + socat 公網做法見文末
+> 「附錄：nginx-proxy 公網模式（不建議）」。
 
 ---
 
 ## 1. 建立 dev user
 
 ```bash
-sudo adduser devops
-sudo usermod -aG docker devops
-id devops   # 記下 uid/gid
+sudo adduser deploy
+sudo usermod -aG docker deploy
+id deploy   # 記下 uid/gid
 ```
 
 ## 2. 安裝宿主機工具
@@ -41,7 +39,7 @@ id devops   # 記下 uid/gid
 以 dev user 登入：
 
 ```bash
-su - devops
+su - deploy
 
 # Node.js 22 (comux + Claude Code 共用)
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
@@ -57,12 +55,15 @@ claude --version
 tmux -V
 ```
 
-## 3. Tailscale（選用）
+## 3. Tailscale（必要）
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
+tailscale status   # 記下這台機器的 MagicDNS 名稱，例如 your-host.your-tailnet.ts.net
 ```
+
+tailnet 管理後台需開啟 MagicDNS 與 HTTPS Certificates，Tailscale Serve 才能簽憑證。
 
 ## 4. 拉 comux + build
 
@@ -84,14 +85,13 @@ POSTGRES_PASSWORD=${DB_PASS}
 COMUX_SECRET=${JWT}
 
 # 專案根目錄
-PROJECTS_ROOT=/home/devops/projects
+PROJECTS_ROOT=/home/deploy/projects
 
-# Domain / SSL
-VIRTUAL_HOST=comux.yoursite.com
-LETSENCRYPT_EMAIL=you@example.com
+# 監聽位址（預設就是 127.0.0.1；寫出來提醒自己不要改成 0.0.0.0）
+HOSTNAME=127.0.0.1
 
-# WS origin allowlist
-ALLOWED_ORIGINS=comux.yoursite.com,localhost
+# WS / CSRF origin allowlist：Tailscale Serve 的 MagicDNS 名稱
+ALLOWED_ORIGINS=your-host.your-tailnet.ts.net,localhost
 
 # Cloudflare (選用，DNS 管理功能才需要)
 CF_API_TOKEN=
@@ -103,20 +103,13 @@ npm ci
 npm run build
 ```
 
-## 5. 啟動 DB + nginx-proxy
+## 5. 啟動 DB
 
 ```bash
-# wp-proxy network 必須已存在 (nginx-proxy-automation 那組)
-docker network create wp-proxy 2>/dev/null || true
-
-# 起 DB + prod-proxy (socat)
-# 注意 .env 裡含逗號的值（例如 ALLOWED_ORIGINS）要先手動 export，
-# 否則 docker compose v5 會在第一個逗號截斷，導致 nginx-proxy 註冊錯 hostname。
-set -a; . ./.env; set +a
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d db
 
 # 確認
-docker ps | grep -E 'comux|postgres'
+docker ps | grep postgres
 ```
 
 ## 6. Push DB schema
@@ -141,20 +134,29 @@ sudo systemctl status comux
 sudo journalctl -u comux -f
 ```
 
-## 8. 驗證
+## 8. Tailscale Serve
 
 ```bash
-# Node 跑在 host
-curl -s http://localhost:3000/api/auth/check
-
-# 容器 proxy 也通
-docker exec comux-proxy nc -zv host.docker.internal 3000
-
-# nginx-proxy 有簽憑證後
-curl -I https://comux.yoursite.com
+# tailnet 內 HTTPS:443 → 本機 comux
+sudo tailscale serve --bg --https=443 http://127.0.0.1:3000
+tailscale serve status
 ```
 
-瀏覽器開 `https://comux.yoursite.com`，建 admin 帳號 → 專案 → Terminal 輸入 `claude`。
+`--bg` 會把設定存起來，重開機後自動恢復。要撤掉：`sudo tailscale serve --https=443 off`。
+
+## 9. 驗證
+
+```bash
+# Node 只聽 loopback（應該只看到 127.0.0.1:3000，不能有 0.0.0.0:3000 / *:3000）
+ss -ltnp | grep 3000
+curl -s http://127.0.0.1:3000/api/auth/check
+
+# 從 tailnet 內另一台裝置
+curl -I https://your-host.your-tailnet.ts.net
+```
+
+用已登入 Tailscale 的裝置開 `https://your-host.your-tailnet.ts.net`，
+建 admin 帳號 → 專案 → Terminal 輸入 `claude`。
 
 ---
 
@@ -175,8 +177,8 @@ sudo systemctl restart comux
 # Node log
 sudo journalctl -u comux -f
 
-# 代理容器 log
-docker logs comux-proxy -f
+# Tailscale Serve 設定
+tailscale serve status
 
 # DB 直接連
 docker exec -it $(docker compose ps -q db) psql -U comux
@@ -189,8 +191,6 @@ tmux attach -t <project-name>
 ---
 
 ## macOS 本機開發
-
-本機流程未變：
 
 ```bash
 cd ~/next/comux
@@ -207,8 +207,30 @@ npm run dev
 # http://comux.test
 ```
 
-`npm run dev` 跑兩個進程（Next.js port 3000 + WS port 3001），`dev-proxy` 容器把
-`comux.test` 流量從 nginx-proxy 轉到宿主機 port 3000
+`npm run dev` 跑兩個進程（Next.js port 3000 + WS port 3001），兩者都只聽 `127.0.0.1`。
+`dev-proxy` 容器把 `comux.test` 流量從 nginx-proxy 轉到宿主機 port 3000（Docker Desktop
+的 `host.docker.internal` 會轉到宿主機的 loopback）。若你的 Docker 環境連不到宿主機
+loopback，可暫時用 `COMUX_DEV_HOST=0.0.0.0 npm run dev`，但要確定這台機器不在不信任的網路上。
+
+---
+
+## 附錄：nginx-proxy 公網模式（不建議）
+
+早期的部署方式是用 `docker-compose.production.yml` 裡的 `prod-proxy`（socat 容器）
+掛到 nginx-proxy-automation 的 `wp-proxy` network，讓 acme-companion 依
+`VIRTUAL_HOST` / `LETSENCRYPT_HOST` 自動簽 Let's Encrypt 憑證，把 comux 開到公網。
+
+**不建議這樣做**，原因：
+
+- comux 等於主機的網頁 shell（終端機直接 attach tmux），公開後唯一的防線只剩登入頁；
+  任何 Next.js / ws / 認證邏輯的漏洞都會直接變成遠端拿 shell
+- 登入頁會被全網掃描與暴力破解
+- socat 容器連不到宿主機的 `127.0.0.1`，comux 必須改聽 `0.0.0.0`，還得自己用防火牆
+  擋掉公網直連 3000，設錯一步就整個裸露
+
+真的需要時（例如沒辦法裝 Tailscale 的裝置），至少要：comux 前面再加一層 IP allowlist
+或 SSO、防火牆只開 443、`prod-proxy` 用 `--profile public-proxy` 明確啟用，並在 `.env`
+設好 `VIRTUAL_HOST` / `LETSENCRYPT_EMAIL` / `ALLOWED_ORIGINS`。
 
 > 下方為通用說明。實際主機名、SSH 帳號、安裝路徑與 Tailscale tag 記在內部部署筆記（不放公開 repo）。
 

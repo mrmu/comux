@@ -52,6 +52,9 @@ COPY --from=builder /app/server-shared ./server-shared
 
 EXPOSE 3000
 ENV PORT=3000
+# 容器內必須聽 0.0.0.0，port 才轉得出容器；對外暴露與否由容器網路決定
+# （compose 不要 publish 到公網介面，要 publish 也只綁 127.0.0.1:3000:3000）。
+# 宿主機直接跑 prod-server.js 時預設是 127.0.0.1，不受這行影響。
 ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]

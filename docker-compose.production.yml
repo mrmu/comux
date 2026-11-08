@@ -1,11 +1,11 @@
 # Production overrides (Linux)
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
-# 架構：
-#   - comux (Next.js + WS) 直接跑在宿主機 (systemd) — port 3000
-#   - 本檔案只負責 DB + 一個薄的 socat proxy，讓 nginx-proxy / acme-companion
-#     能掃到 VIRTUAL_HOST / LETSENCRYPT_HOST 並自動簽憑證
-#   - host.docker.internal 需要 extra_hosts (Linux 沒有內建)
+# 架構（建議）：
+#   - comux (Next.js + WS) 直接跑在宿主機 (systemd)，只聽 127.0.0.1:3000
+#   - 對外由 Tailscale Serve 提供 HTTPS，只有 tailnet 內的裝置連得到：
+#       tailscale serve --bg --https=443 http://127.0.0.1:3000
+#   - 本檔案預設只起 DB
 services:
   # Expose DB to host (Node 跑在宿主機，透過 localhost:5432 連)
   # 綁 127.0.0.1 只讓本機存取，不對外開放
@@ -17,30 +17,36 @@ services:
   app:
     profiles: ["disabled"]
 
-  # 停用 migrate (改由 host 端 `npm run db:push` 處理)
+  # 停用 migrate (改由 host 端 `npx prisma migrate deploy` 處理)
   migrate:
     profiles: ["disabled"]
 
-  # 把 nginx-proxy 流量轉到宿主機的 Node process
+  # ⚠️ 不建議：把 comux 透過 nginx-proxy 公開到網際網路。
+  #
+  # comux 等於這台主機的網頁 shell，公開後任何人都能對登入頁暴力破解、
+  # 或利用 Next.js / ws 的漏洞直接拿到 shell。請改用上面的 Tailscale Serve。
+  #
+  # 此服務預設不啟動（profile: public-proxy）。真的要用時：
+  #   1. 宿主機的 comux 要改聽 docker bridge 可達的位址（HOSTNAME=0.0.0.0 並用
+  #      防火牆擋掉公網直連 3000），因為容器連不到宿主機的 127.0.0.1
+  #   2. VIRTUAL_HOST / LETSENCRYPT_EMAIL 寫進 .env（下方只是佔位符）
+  #   3. docker compose -f docker-compose.yml -f docker-compose.production.yml \
+  #        --profile public-proxy up -d prod-proxy
   #
   # 注意：docker compose v5 在 auto-load .env 時，對值含逗號的變數會在第一個逗號
-  # 處截斷（例如 VIRTUAL_HOST=a.com,b.com 會被當成 a.com）。要讓 nginx-proxy
-  # 支援多 host（"a.com,b.com" 是 nginx-proxy 官方支援格式），重新 up 前先手動
-  # export env：
-  #   set -a; . ./.env; set +a
-  #   docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --force-recreate prod-proxy
-  # 或 inline：
-  #   VIRTUAL_HOST="a.com,b.com" docker compose ... up -d --force-recreate prod-proxy
+  # 處截斷（例如 VIRTUAL_HOST=a.com,b.com 會被當成 a.com），重新 up 前先
+  # `set -a; . ./.env; set +a` 手動 export。
   prod-proxy:
+    profiles: ["public-proxy"]
     image: alpine/socat
     container_name: comux-proxy
     command: TCP-LISTEN:3000,fork,reuseaddr TCP:host.docker.internal:3000
     restart: unless-stopped
     environment:
-      VIRTUAL_HOST: ${VIRTUAL_HOST:-comux.audilu.com}
+      VIRTUAL_HOST: ${VIRTUAL_HOST:-comux.example.com}
       VIRTUAL_PORT: "3000"
-      LETSENCRYPT_HOST: ${VIRTUAL_HOST:-comux.audilu.com}
-      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-audilu@panmedia.asia}
+      LETSENCRYPT_HOST: ${VIRTUAL_HOST:-comux.example.com}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-admin@example.com}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

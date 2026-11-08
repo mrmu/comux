@@ -31,7 +31,9 @@ require("./server-shared/comux-secret").assertComuxSecretOrExit("comux");
 }
 
 const currentPort = parseInt(process.env.PORT, 10) || 3000;
-const hostname = process.env.HOSTNAME || "0.0.0.0";
+// 預設只聽 loopback：正式機由 Tailscale Serve（或其他本機反向代理）轉進來，
+// comux 本身絕不直接對外。真的需要時才用 HOSTNAME 覆寫（例如容器內的 0.0.0.0）。
+const hostname = process.env.HOSTNAME || "127.0.0.1";
 
 const nextConfig = require(
   path.join(__dirname, ".next", "required-server-files.json")
@@ -187,7 +189,9 @@ async function main() {
     // Auto-restore sessions from DB after server is ready
     setTimeout(async () => {
       try {
-        const res = await fetch(`http://localhost:${currentPort}/api/sessions/restore`, {
+        // 用實際 bind 的位址打回自己；"localhost" 在 Node 可能先解析成 ::1 而連不上
+        const selfHost = hostname === "0.0.0.0" || hostname === "::" ? "127.0.0.1" : hostname;
+        const res = await fetch(`http://${selfHost}:${currentPort}/api/sessions/restore`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });

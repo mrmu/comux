@@ -15,7 +15,9 @@ WorkingDirectory=/home/devops/comux
 EnvironmentFile=/home/devops/comux/.env
 Environment=NODE_ENV=production
 Environment=PORT=3000
-Environment=HOSTNAME=0.0.0.0
+# 只聽 loopback —— 對外一律經 Tailscale Serve（tailscale serve --bg --https=443 http://127.0.0.1:3000）。
+# 不要改成 0.0.0.0：comux 等於這台主機的網頁 shell。
+Environment=HOSTNAME=127.0.0.1
 
 # 用 prod-server.js (plain JS, 不需編譯) 在 repo root 直接跑 —
 # 它會讀 ./.next/required-server-files.json + next/dist/server/lib/start-server

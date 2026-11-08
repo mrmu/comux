@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npx tsx ws-dev-server.ts & NEXT_PUBLIC_WS_PORT=3001 npx next dev",
+    "dev": "npx tsx ws-dev-server.ts & NEXT_PUBLIC_WS_PORT=3001 npx next dev -H ${COMUX_DEV_HOST:-127.0.0.1}",
     "build": "env -u TURBOPACK -u __NEXT_PRIVATE_STANDALONE_CONFIG -u NEXT_DEPLOYMENT_ID -u __NEXT_PROCESSED_ENV sh -c 'npx prisma generate && next build'",
     "start": "NODE_ENV=production npx tsx server.ts",
     "lint": "eslint",

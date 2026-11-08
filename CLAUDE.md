@@ -12,21 +12,21 @@ GitHub: `git@github.com:mrmu/comux.git`
 Host (Linux VPS / macOS)
 ├── tmux server              ← session 持久化
 ├── Claude Code CLI          ← 已安裝、已認證 (Max Plan)
-├── comux (Next.js + WS)    ← Node 直接跑在 host (systemd in prod, `npm run dev` in dev)
+├── comux (Next.js + WS)    ← Node 直接跑在 host，只聽 127.0.0.1:3000
+│                              (systemd in prod, `npm run dev` in dev)
+├── Tailscale Serve          ← prod：tailnet 內 HTTPS → http://127.0.0.1:3000
 ├── {projectsRoot}/          ← 所有專案目錄 (DB 設定)
 └── ~/.claude/               ← Claude Code 認證 + 設定
 
 Docker (只跑輔助服務)
-├── PostgreSQL               ← 專案 metadata、用戶帳號、settings
-└── comux-proxy (socat)     ← 註冊 VIRTUAL_HOST 給 nginx-proxy，轉發到 host:3000
-                               (讓 acme-companion 自動簽 Let's Encrypt 憑證)
+└── PostgreSQL               ← 專案 metadata、用戶帳號、settings（只綁 127.0.0.1）
 ```
 
 - comux 本體**不跑在容器裡** — host 直接跑 Node，這樣才能直接存取 tmux socket、
   Claude Code 認證、SSH keys、`~/.claude/` 等檔案。早期把 comux 塞容器再用
   `pid: host` + UID/GID override + home mount 假冒 host user 的做法已棄用。
-- Docker 只負責 DB 和一個薄 socat proxy 讓 nginx-proxy-automation 能掃到
-  `VIRTUAL_HOST` / `LETSENCRYPT_HOST` 自動簽憑證。
+- comux 等於主機的網頁 shell：**只能經 Tailscale Serve 存取，不開公網**。
+  舊的 nginx-proxy + socat (`prod-proxy`) 公網方式已標為不建議，預設不啟動。
 
 ## Tech Stack
 
@@ -65,8 +65,8 @@ npm run dev
 ## Production 部署
 
 **部署方式與完整步驟請見 [`docs/deploy/setup.md`](docs/deploy/setup.md)**。
-摘要：Node 直接跑在宿主機（systemd 管理），Docker 只跑 DB + socat proxy，
-nginx-proxy-automation 透過 socat 容器的 `VIRTUAL_HOST` 自動簽 Let's Encrypt。
+摘要：Node 直接跑在宿主機（systemd 管理、只聽 127.0.0.1:3000），Docker 只跑 DB，
+對外由 `tailscale serve --bg --https=443 http://127.0.0.1:3000` 提供 tailnet 內 HTTPS。
 
 ### 正式機清單
 
