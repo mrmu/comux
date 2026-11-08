@@ -1,0 +1,70 @@
+# gitleaks 設定：預設規則（API key、私鑰、token…）＋ comux 自訂的內部識別字樣。
+#
+# 這是公開 repo，comux 又是主機的網頁 shell —— 內部主機名、tailnet 名稱、ACL tag
+# 一旦寫進 repo，就等於替攻擊者畫好地圖。文件與範例一律用佔位符：
+#   comux.example.com、your-host.your-tailnet.ts.net、/home/deploy
+#
+# 本機檢查：gitleaks git --config .gitleaks.toml   （或 gitleaks dir . --config .gitleaks.toml）
+
+title = "comux gitleaks config"
+
+[extend]
+useDefault = true
+
+# ─── 內部識別字樣 ────────────────────────────────────────────────
+
+[[rules]]
+id = "comux-tailnet-hostname"
+description = "真實的 Tailscale MagicDNS 名稱（*.ts.net），請改用 your-host.your-tailnet.ts.net"
+regex = '''(?i)\b[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*\.ts\.net\b'''
+keywords = ["ts.net"]
+
+  [[rules.allowlists]]
+  description = "文件用的佔位符"
+  regexTarget = "match"
+  regexes = [
+    '''(?i)^your-host\.your-tailnet\.ts\.net$''',
+    '''(?i)^[a-z0-9-]+\.your-tailnet\.ts\.net$''',
+    '''(?i)^[a-z0-9-]+\.example\.ts\.net$''',
+  ]
+
+[[rules]]
+id = "comux-tailscale-tag"
+description = "內部 Tailscale ACL tag（tag:pan-*）"
+regex = '''(?i)\btag:pan-[a-z0-9-]+'''
+keywords = ["tag:pan-"]
+
+[[rules]]
+id = "comux-linode-hostname"
+description = "內部主機名（linode-*）"
+regex = '''(?i)\blinode-[a-z0-9][a-z0-9-]*'''
+keywords = ["linode-"]
+
+[[rules]]
+id = "comux-lobster-hostname"
+description = "內部主機名（lobster-*）"
+regex = '''(?i)\blobster-[a-z0-9][a-z0-9-]*'''
+keywords = ["lobster-"]
+
+[[rules]]
+id = "comux-macos-home-path"
+description = "寫死的 macOS 家目錄（/Users/<帳號>），請改讀 HOME / os.homedir()"
+regex = '''/Users/[a-z][a-z0-9._-]+'''
+keywords = ["/users/"]
+
+  [[rules.allowlists]]
+  description = "說明用的假帳號"
+  regexTarget = "match"
+  regexes = ['''^/Users/(foo|bar|me|you|example|username|user)$''']
+
+# ─── 全域例外 ────────────────────────────────────────────────────
+
+[allowlist]
+description = "設定檔本身、自動產生的檔案與 build 產物（gitleaks dir 不看 .gitignore）"
+paths = [
+  '''(^|/)\.next/''',
+  '''(^|/)node_modules/''',
+  '''^\.gitleaks\.toml$''',
+  '''(^|/)package-lock\.json$''',
+  '''^src/generated/''',
+]

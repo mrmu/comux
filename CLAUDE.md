@@ -140,6 +140,8 @@ docs/deploy/        # Deployment guide
 - Session 可撤銷：API 的 requireAuth 與 WebSocket 驗證都查 DB 比對 tokenVersion（proxy.ts 只驗簽章）
 - 首個用戶註冊需帶一次性 setup token（啟動時印在 log 或 `COMUX_SETUP_TOKEN`），之後只能由已登入者建帳號
 - Restore 不自動執行 DB 中的 command
+- 秘密掃描：`.github/workflows/secret-scan.yml`（gitleaks + `.gitleaks.toml` 自訂規則）；
+  commit 前可在本機跑 `gitleaks git --config .gitleaks.toml --log-opts="origin/main..HEAD"`
 
 ## 每次修改都要先測試，前後端都要，然後確認功能正常。
 
