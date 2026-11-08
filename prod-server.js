@@ -42,16 +42,23 @@ process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 
 // ─── Auth ──────────────────────────────────────────────────────────
 
-// JWT 簽章 + DB tokenVersion 比對（與 API 的 requireAuth 相同規則）
-const { verifySessionToken, getCookieValue } = require("./server-shared/ws-guard");
+// JWT 簽章 + DB tokenVersion 比對（與 API 的 requireAuth 相同規則）、
+// 只允許 comux 管理的 session、tmux target 精確比對 —— 與 ws-server.ts 共用
+const {
+  verifySessionToken,
+  isManagedSession,
+  parseTerminalPath,
+  tmuxTarget,
+  getCookieValue,
+  WS_MAX_PAYLOAD,
+} = require("./server-shared/ws-guard");
 
 // ─── PTY terminal handler ──────────────────────────────────────────
 
 function handleTerminal(ws, sessionName, windowIndex) {
   const pty = require("node-pty");
-  // Use ={name} for exact match (prevents fnmatch pattern injection)
-  const target =
-    windowIndex !== undefined ? `${sessionName}:${windowIndex}` : `${sessionName}`;
+  // `=name` 精確比對（避免前綴比對到別的 session）
+  const target = tmuxTarget(sessionName, windowIndex);
 
   const socketArgs = process.env.TMUX_SOCKET
     ? ["-S", process.env.TMUX_SOCKET]
@@ -77,9 +84,13 @@ function handleTerminal(ws, sessionName, windowIndex) {
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
-      if (msg.type === "input") ptyProcess.write(msg.data);
-      else if (msg.type === "resize" && msg.cols && msg.rows)
+      if (msg.type === "input" && typeof msg.data === "string") ptyProcess.write(msg.data);
+      else if (msg.type === "resize" && Number.isInteger(msg.cols) && Number.isInteger(msg.rows)
+        && msg.cols > 0 && msg.rows > 0 && msg.cols <= 1000 && msg.rows <= 1000)
         ptyProcess.resize(msg.cols, msg.rows);
+      // 前端每 25 秒送 app-level ping，60 秒沒收到 pong 就重連（與 ws-server.ts 一致）
+      else if (msg.type === "ping" && ws.readyState === 1)
+        ws.send(JSON.stringify({ type: "pong" }));
     } catch {}
   });
 
@@ -107,58 +118,52 @@ async function main() {
 
   // WebSocket
   const { WebSocketServer } = require("ws");
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
 
-  const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
   const ALLOWED_ORIGINS = new Set(
     (process.env.ALLOWED_ORIGINS || process.env.VIRTUAL_HOST || "localhost")
       .split(",").map((o) => o.trim().toLowerCase())
   );
 
+  const reject = (socket, status) => {
+    if (!socket.destroyed) socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
+    socket.destroy();
+  };
+
   server.on("upgrade", async (request, socket, head) => {
     const { pathname } = parse(request.url || "", true);
 
     if (pathname && pathname.startsWith("/ws/terminal/")) {
-      // Origin check
-      const origin = request.headers.origin;
-      if (origin) {
-        try {
-          const host = new URL(origin).hostname.toLowerCase();
-          if (!ALLOWED_ORIGINS.has(host)) {
-            socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
-            socket.destroy();
-            return;
-          }
-        } catch {
-          socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
-          socket.destroy();
-          return;
+      try {
+        // Origin check
+        const origin = request.headers.origin;
+        if (origin) {
+          let host = "";
+          try { host = new URL(origin).hostname.toLowerCase(); } catch {}
+          if (!ALLOWED_ORIGINS.has(host)) return reject(socket, "403 Forbidden");
         }
+
+        // 路徑格式：/ws/terminal/{session}[/{window}]
+        const parsed = parseTerminalPath(pathname);
+        if (!parsed) return reject(socket, "400 Bad Request");
+
+        // Auth check（查 DB，所以是非同步）
+        const token = getCookieValue(request.headers.cookie, "comux_token");
+        if (!(await verifySessionToken(token))) return reject(socket, "401 Unauthorized");
+
+        // 只能 attach comux 自己管理的 session（projects 表裡有的）
+        if (!(await isManagedSession(parsed.sessionName))) return reject(socket, "404 Not Found");
+
+        // 等 DB 期間 client 可能已斷線
+        if (socket.destroyed) return;
+
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          handleTerminal(ws, parsed.sessionName, parsed.windowIndex);
+        });
+      } catch (err) {
+        console.error("> terminal upgrade failed:", err && err.message);
+        reject(socket, "500 Internal Server Error");
       }
-
-      // Auth check（查 DB，所以是非同步；等待期間 socket 可能已被關掉）
-      const token = getCookieValue(request.headers.cookie, "comux_token");
-      if (!(await verifySessionToken(token))) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-      if (socket.destroyed) return;
-
-      // Validate session name
-      const parts = pathname.replace("/ws/terminal/", "").split("/");
-      const sessionName = decodeURIComponent(parts[0]);
-      const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
-
-      if (!SAFE_NAME_RE.test(sessionName)) {
-        socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        handleTerminal(ws, sessionName, windowIndex);
-      });
     }
     // Don't destroy — let Next.js handle other upgrades
   });

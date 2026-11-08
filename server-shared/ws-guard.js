@@ -56,6 +56,63 @@ async function verifySessionToken(token) {
 }
 
 /**
+ * 只允許 attach 到 comux 自己管理的 tmux session。
+ * comux 的 session 名稱就是 projects.name（建立專案時以 validate.ts 驗證後
+ * 拿來當 tmux session 名稱），所以以 DB 有沒有這個專案為準；
+ * 主機上其他人／其他工具開的 tmux session 一律不給連。
+ * @param {string} name
+ * @returns {Promise<boolean>}
+ */
+async function isManagedSession(name) {
+  try {
+    const { rows } = await getPool().query("SELECT 1 FROM projects WHERE name = $1", [name]);
+    return rows.length === 1;
+  } catch (err) {
+    console.error("[comux-ws] session check failed:", /** @type {Error} */ (err).message);
+    return false;
+  }
+}
+
+/** session 名稱規則（同 src/lib/validate.ts）。 */
+const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+/** @param {string} name */
+function isValidSessionName(name) {
+  return name.length > 0 && name.length <= 100 && SAFE_NAME_RE.test(name);
+}
+
+/**
+ * 解析 /ws/terminal/{session}/{window}。格式不對回 null。
+ * @param {string} pathname
+ * @returns {{ sessionName: string, windowIndex: number | undefined } | null}
+ */
+function parseTerminalPath(pathname) {
+  const parts = pathname.slice("/ws/terminal/".length).split("/");
+  if (parts.length > 2) return null;
+  let sessionName;
+  try {
+    sessionName = decodeURIComponent(parts[0]);
+  } catch {
+    return null;
+  }
+  if (!isValidSessionName(sessionName)) return null;
+  if (parts[1] === undefined || parts[1] === "") return { sessionName, windowIndex: undefined };
+  if (!/^\d{1,4}$/.test(parts[1])) return null;
+  return { sessionName, windowIndex: parseInt(parts[1], 10) };
+}
+
+/**
+ * tmux 的 target：前綴 `=` 強制精確比對 session 名稱，避免 `foo` 被前綴比對到 `foo-bar`。
+ * @param {string} sessionName
+ * @param {number | undefined} windowIndex
+ */
+function tmuxTarget(sessionName, windowIndex) {
+  return windowIndex !== undefined ? `=${sessionName}:${windowIndex}` : `=${sessionName}`;
+}
+
+/** 單一 WebSocket 訊息上限：鍵盤輸入／貼上／resize 都很小，1 MiB 綽綽有餘 */
+const WS_MAX_PAYLOAD = 1024 * 1024;
+
+/**
  * @param {string | undefined} header
  * @param {string} name
  * @returns {string | null}
@@ -66,4 +123,13 @@ function getCookieValue(header, name) {
   return m ? m[1] : null;
 }
 
-module.exports = { verifySessionToken, getCookieValue, getPool };
+module.exports = {
+  verifySessionToken,
+  isManagedSession,
+  isValidSessionName,
+  parseTerminalPath,
+  tmuxTarget,
+  getCookieValue,
+  getPool,
+  WS_MAX_PAYLOAD,
+};

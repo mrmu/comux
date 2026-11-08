@@ -133,7 +133,10 @@ docs/deploy/        # Deployment guide
 - Session name 驗證: `/^[a-zA-Z0-9_-]+$/`，tmux `-t =name` 強制精確匹配
 - CWD 限制在 projectsRoot (DB setting) 內
 - Command 驗證：拒絕 shell metacharacters
-- WebSocket origin allowlist (ALLOWED_ORIGINS env)
+- WebSocket origin allowlist (ALLOWED_ORIGINS env)、`maxPayload` 1 MiB、只能 attach `projects` 表裡有的 session，
+  tmux target 用 `=name` 精確比對（server-shared/ws-guard.js，prod-server.js 與 ws-server.ts 共用）
+- CSRF（src/proxy.ts）：`/api/*` 非 GET 請求要求 `Sec-Fetch-Site: same-origin`（或同源 / ALLOWED_ORIGINS 的 `Origin`）
+  且 `Content-Type: application/json`；需要非 JSON body 的 API 要加進 `NON_JSON_API_PATHS`
 - Login rate limit：來源位址 5 次/分（socket 位址；只有 TRUSTED_PROXIES 才採 X-Forwarded-For）＋ 帳號 15 分鐘失敗 10 次
 - 新設定的密碼至少 12 字元
 - Cookie: httpOnly + sameSite:strict + secure (prod)
