@@ -5,10 +5,15 @@
  * Prod: node server.js (standalone output replaces this via prod-server.js)
  */
 
+import "dotenv/config";
 import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
 import { setupWebSocket } from "./ws-server";
+import { assertComuxSecretOrExit } from "./server-shared/comux-secret";
+
+// 秘鑰不合格（未設 / 太短 / 公開預設值）就拒絕啟動
+assertComuxSecretOrExit("comux");
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);

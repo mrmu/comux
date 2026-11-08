@@ -11,6 +11,9 @@ const dir = path.join(__dirname);
 process.env.NODE_ENV = "production";
 process.chdir(__dirname);
 
+// COMUX_SECRET 不合格（未設 / 太短 / 公開預設值）就直接拒絕啟動
+require("./server-shared/comux-secret").assertComuxSecretOrExit("comux");
+
 // systemd gives us a bare PATH (/usr/local/bin:/usr/bin:...), but per-user
 // CLI installs live under $HOME — notably Claude Code's native installer
 // (~/.local/bin/claude). Prepend the ones that exist so `which claude` in the
@@ -38,12 +41,11 @@ process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 // ─── Auth ──────────────────────────────────────────────────────────
 
 const jwt = require("jsonwebtoken");
-const JWT_SECRET =
-  process.env.COMUX_SECRET || "dev-secret-change-in-production";
+const { getComuxSecret } = require("./server-shared/comux-secret");
 
 function verifyToken(token) {
   try {
-    jwt.verify(token, JWT_SECRET);
+    jwt.verify(token, getComuxSecret());
     return true;
   } catch {
     return false;

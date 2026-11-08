@@ -80,7 +80,7 @@ cat > .env << EOF
 DATABASE_URL=postgresql://comux:${DB_PASS}@localhost:5432/comux?schema=public
 POSTGRES_PASSWORD=${DB_PASS}
 
-# Auth JWT
+# Auth JWT（必填，≥ 32 字元；未設 / 太短 / 公開預設值 → comux 拒絕啟動）
 COMUX_SECRET=${JWT}
 
 # 專案根目錄
@@ -196,6 +196,10 @@ tmux attach -t <project-name>
 cd ~/next/comux
 brew install tmux
 npm install -g @anthropic-ai/claude-code
+
+# 本機也要設 COMUX_SECRET（≥ 32 字元；未設或用預設值時 dev server 拒絕啟動）
+cp .env.example .env
+#   把 `openssl rand -hex 32` 的結果填進 .env 的 COMUX_SECRET=
 
 docker compose up -d db dev-proxy
 npm run dev

@@ -41,7 +41,8 @@ services:
     environment:
       DATABASE_URL: postgresql://comux:${POSTGRES_PASSWORD:-comux}@db:5432/comux?schema=public
       COMUX_PASSWORD: ${COMUX_PASSWORD:-}
-      COMUX_SECRET: ${COMUX_SECRET:-}
+      # JWT 秘鑰必填（≥ 32 字元，用 `openssl rand -hex 32` 產生），未設時 compose 直接報錯
+      COMUX_SECRET: ${COMUX_SECRET:?COMUX_SECRET 未設定，請用 openssl rand -hex 32 產生後寫進 .env}
       HOST_HOME: ${HOST_HOME:-/home/devops_bot}
     depends_on:
       db:

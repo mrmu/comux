@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.COMUX_SECRET || "dev-secret-change-in-production";
+import { getComuxSecret } from "../../../../../server-shared/comux-secret";
 
 export async function PUT(request: NextRequest) {
   const token = request.cookies.get("comux_token")?.value;
@@ -11,7 +10,7 @@ export async function PUT(request: NextRequest) {
 
   let userId: number;
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: number };
+    const payload = jwt.verify(token, getComuxSecret()) as { userId: number };
     userId = payload.userId;
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

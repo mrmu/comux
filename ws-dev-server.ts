@@ -3,15 +3,17 @@
  * Binds to 127.0.0.1 only (not exposed to LAN).
  */
 
+// next dev 會自己讀 .env，但這支是獨立的 tsx 進程，要自己載入
+import "dotenv/config";
 import { createServer } from "http";
 import { setupWebSocket } from "./ws-server";
+import { assertComuxSecretOrExit } from "./server-shared/comux-secret";
+
+// 秘鑰不合格就拒絕啟動（本機開發也一樣，不再有預設值）
+assertComuxSecretOrExit("comux-ws-dev");
 
 const port = parseInt(process.env.WS_PORT || "3001", 10);
 const host = "127.0.0.1";
-
-if (!process.env.COMUX_PASSWORD) {
-  console.warn("⚠ COMUX_PASSWORD not set — auth disabled. Binding to localhost only.");
-}
 
 const server = createServer((_req, res) => {
   res.writeHead(200);

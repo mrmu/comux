@@ -46,8 +46,9 @@ COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/pg ./node_modules/pg
 
-# Custom production server
+# Custom production server（+ 它 require 的共用 CJS 模組，例如 COMUX_SECRET 檢查）
 COPY --from=builder /app/prod-server.js ./server.js
+COPY --from=builder /app/server-shared ./server-shared
 
 EXPOSE 3000
 ENV PORT=3000

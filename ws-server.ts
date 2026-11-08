@@ -18,13 +18,11 @@ function isValidSessionName(name: string): boolean {
 // ─── Auth (JWT) ────────────────────────────────────────────────────
 
 import jwt from "jsonwebtoken";
-
-const JWT_SECRET =
-  process.env.COMUX_SECRET || "dev-secret-change-in-production";
+import { getComuxSecret } from "./server-shared/comux-secret";
 
 function verifyToken(token: string): boolean {
   try {
-    jwt.verify(token, JWT_SECRET);
+    jwt.verify(token, getComuxSecret());
     return true;
   } catch {
     return false;

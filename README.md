@@ -74,7 +74,8 @@ comux 是一個「半容器化」的架構：
 # 前置：Node 22、tmux、git、docker 都裝好；要用的 AI agent CLI (Claude Code / Codex / Gemini CLI / ...) 已登入認證
 git clone git@github.com:mrmu/comux.git ~/comux && cd ~/comux
 
-# 設定環境變數（DATABASE_URL、COMUX_SECRET、VIRTUAL_HOST 等）
+# 設定環境變數（DATABASE_URL、COMUX_SECRET 等）
+# COMUX_SECRET 必填：openssl rand -hex 32（未設 / 太短 / 預設值 → 伺服器拒絕啟動）
 cp .env.example .env && nano .env
 
 # Build + 起 DB 和 socat proxy
@@ -101,6 +102,10 @@ sudo systemctl restart comux
 ### 本機開發（macOS）
 
 ```bash
+cp .env.example .env
+# 本機也要設 COMUX_SECRET（未設或用預設值時 dev server 會拒絕啟動）
+echo "COMUX_SECRET=$(openssl rand -hex 32)" >> .env   # 或手動填進 .env 裡空著的那行
+
 docker compose up -d db dev-proxy   # DB + nginx-proxy 轉發橋接
 npm run dev                         # http://comux.test
 ```

@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { getComuxSecret } from "../server-shared/comux-secret";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.COMUX_SECRET || "dev-secret-change-in-production"
-);
+// 秘鑰不合格時 getComuxSecret() 會丟錯 → 請求失敗，不會退回任何預設值
+function jwtKey(): Uint8Array {
+  return new TextEncoder().encode(getComuxSecret());
+}
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/register", "/api/auth/check"];
 
 async function isValidToken(token: string): Promise<boolean> {
   try {
-    await jwtVerify(token, JWT_SECRET);
+    await jwtVerify(token, jwtKey());
     return true;
   } catch {
     return false;

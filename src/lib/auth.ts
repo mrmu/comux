@@ -3,9 +3,8 @@ import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { prisma } from "./db";
+import { getComuxSecret } from "../../server-shared/comux-secret";
 
-const JWT_SECRET =
-  process.env.COMUX_SECRET || "dev-secret-change-in-production";
 const COOKIE_NAME = "comux_token";
 
 interface JwtPayload {
@@ -16,14 +15,14 @@ interface JwtPayload {
 // ─── Token management ──────────────────────────────────────────────
 
 function generateToken(user: { id: number; email: string }): string {
-  return jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+  return jwt.sign({ userId: user.id, email: user.email }, getComuxSecret(), {
     expiresIn: "7d",
   });
 }
 
 function verifyToken(token: string): JwtPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+    return jwt.verify(token, getComuxSecret()) as JwtPayload;
   } catch {
     return null;
   }
@@ -116,4 +115,4 @@ export async function checkAuth(): Promise<{
   return { authenticated: false, user: null, hasUsers: userCount > 0 };
 }
 
-export { COOKIE_NAME, JWT_SECRET };
+export { COOKIE_NAME };
