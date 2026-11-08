@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 const RE_ANSI = /\x1b\[[0-9;]*[a-zA-Z]/g;
-const CLAUDE_DIR = path.join(process.env.HOME || "/Users/audilu", ".claude");
+const CLAUDE_DIR = path.join(process.env.HOME || os.homedir(), ".claude");
 const CLAUDE_PROJECTS = path.join(CLAUDE_DIR, "projects");
 const MAX_SUMMARY = 200;
 

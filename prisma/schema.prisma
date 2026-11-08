@@ -83,7 +83,7 @@ model Machine {
   dnsName     String   @default("") @map("dns_name")     // full MagicDNS FQDN
   tailscaleIp String   @default("") @map("tailscale_ip")
   os          String   @default("")
-  sshUser     String   @default("") @map("ssh_user")     // default login user, e.g. "devops"
+  sshUser     String   @default("") @map("ssh_user")     // default login user, e.g. "deploy"
   tags        String   @default("")                      // Tailscale ACL tags, comma-separated
   note        String   @default("")
   online      Boolean  @default(false)

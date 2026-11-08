@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 
-const HOST_HOME = process.env.HOST_HOME || "/home/devops_bot";
+// 預設讀環境變數，沒有就用執行 comux 的帳號家目錄（不要寫死任何實際帳號路徑）
+const HOST_HOME = process.env.HOST_HOME || process.env.HOME || os.homedir();
 const SESSION_MAP_PATH = path.join(HOST_HOME, ".ccbot", "session_map.json");
 const MAX_FILE_SIZE = 1_048_576; // 1 MB
 

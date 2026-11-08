@@ -255,24 +255,14 @@ loopback，可暫時用 `COMUX_DEV_HOST=0.0.0.0 npm run dev`，但要確定這�
 或 SSO、防火牆只開 443、`prod-proxy` 用 `--profile public-proxy` 明確啟用，並在 `.env`
 設好 `VIRTUAL_HOST` / `LETSENCRYPT_EMAIL` / `ALLOWED_ORIGINS`。
 
-> 下方為通用說明。實際主機名、SSH 帳號、安裝路徑與 Tailscale tag 記在內部部署筆記（不放公開 repo）。
+---
 
-## 個人專案正式機
+## 多台正式機
 
-網址: https://comux.audilu.com
-已加入 Tailscale，以部署帳號透過 Tailscale SSH 登入，需要時可 `sudo su` 切換 root：
+實際主機名、網址、SSH 帳號、安裝路徑與 Tailscale tag 記在內部部署筆記（不放公開 repo）。
+每台的通則：
 
-```
-<deploy-user>@<personal-host>
-```
-
-## 泛科專案正式機
-
-網址: https://comux.pangogo.com（Tailscale 機器，帶公司部署 tag）
-
-```
-ssh <deploy-user>@<pan-host>   # comux 跑在該帳號家目錄下 (systemd: comux.service)
-ssh root@<pan-host>            # systemctl restart comux 需要 root
-```
-
-DB 容器名為 `webmux-db-1`（歷史命名），psql 帳號/DB 皆為 `comux`。
+- 以部署帳號透過 Tailscale SSH 登入（`ssh <deploy-user>@<host>`），需要時 `sudo` 切 root
+- comux 裝在部署帳號家目錄下，systemd 服務 `comux.service`，`systemctl restart comux` 需 root
+- 對外只走 `tailscale serve`，網址為 `https://<host>.<your-tailnet>.ts.net`
+- DB 容器名為 `webmux-db-1`（歷史命名，見 `docker-compose.yml` 的 `name:`），psql 帳號/DB 皆為 `comux`

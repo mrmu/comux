@@ -1,5 +1,5 @@
 /**
- * Cloudflare DNS management for *.audilu.com
+ * Cloudflare DNS management for the zone set by CF_ZONE_ID
  */
 
 const CF_API = "https://api.cloudflare.com/client/v4";

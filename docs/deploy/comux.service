@@ -7,12 +7,12 @@ Wants=network-online.target
 [Service]
 Type=simple
 # 改成實際的 dev user (跟跑 tmux / claude 的是同一個)
-User=devops
-Group=devops
-WorkingDirectory=/home/devops/comux
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy/comux
 
 # 從 .env 讀 DATABASE_URL / COMUX_SECRET / VIRTUAL_HOST / PROJECTS_ROOT / ...
-EnvironmentFile=/home/devops/comux/.env
+EnvironmentFile=/home/deploy/comux/.env
 Environment=NODE_ENV=production
 Environment=PORT=3000
 # 只聽 loopback —— 對外一律經 Tailscale Serve（tailscale serve --bg --https=443 http://127.0.0.1:3000）。

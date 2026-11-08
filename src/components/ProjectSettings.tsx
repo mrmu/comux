@@ -657,7 +657,7 @@ export default function ProjectSettings({
     if (/EACCES/i.test(raw)) {
       const m = raw.match(/open\s+'([^']+)'/);
       return `權限被拒：comux 無法寫入 ${m ? m[1] : "此檔"}。請在主機上 ${
-        m ? `\`chown devops ${m[1]}\`` : "修改檔案擁有者"
+        m ? `\`chown <執行 comux 的帳號> ${m[1]}\`` : "修改檔案擁有者"
       } 後重試。`;
     }
     if (/ENOENT/i.test(raw)) return `找不到檔案或目錄：${raw}`;

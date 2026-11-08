@@ -72,12 +72,9 @@ npm run dev
 
 ### 正式機清單
 
-> 實際主機名、SSH 帳號與安裝路徑記在內部部署筆記（不放公開 repo）。
-
-| 用途 | 網址 | 登入 |
-|------|------|-----|
-| 個人專案 | https://comux.audilu.com | 透過 Tailscale SSH 以部署帳號登入，需要時 `sudo` 切 root |
-| 泛科專案 | https://comux.pangogo.com | 透過 Tailscale SSH 以部署帳號登入；comux 裝在該帳號家目錄下，systemd 服務 `comux.service`，重啟需 root |
+> 實際主機名、網址、SSH 帳號、安裝路徑與 Tailscale tag 記在內部部署筆記（不放公開 repo）。
+> 公開 repo 裡一律用佔位符：`comux.example.com`、`your-host.your-tailnet.ts.net`、`/home/deploy`。
+> CI 的 gitleaks（`.gitleaks.toml`）會擋常見的內部識別字樣。
 
 ## Commands
 

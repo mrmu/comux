@@ -1,11 +1,12 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
+import os from "os";
 import fs from "fs";
 
 const execFileAsync = promisify(execFile);
 const TMUX_SOCKET = process.env.TMUX_SOCKET || "";
-const CLAUDE_HOME = path.join(process.env.HOME || "/Users/audilu", ".claude");
+const CLAUDE_HOME = path.join(process.env.HOME || os.homedir(), ".claude");
 const CLAUDE_SESSIONS = path.join(CLAUDE_HOME, "sessions");
 
 async function run(cmd: string, args: string[]): Promise<string> {

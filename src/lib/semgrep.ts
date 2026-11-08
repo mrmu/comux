@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
+import os from "os";
 import crypto from "crypto";
 
 const execFileAsync = promisify(execFile);
@@ -17,7 +18,7 @@ const execFileAsync = promisify(execFile);
 export const SEMGREP_IMAGE = "semgrep/semgrep:latest";
 export const SEMGREP_CONFIG = "p/default";
 export const SCAN_ROOT = path.join(
-  process.env.HOME || "/Users/audilu",
+  process.env.HOME || os.homedir(),
   "comux-scans"
 );
 

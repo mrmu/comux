@@ -249,7 +249,7 @@ export default function MachinesPage() {
                     <div className="machine-edit">
                       <input
                         type="text"
-                        placeholder="SSH 使用者（例：devops，留空 = 目前使用者）"
+                        placeholder="SSH 使用者（例：deploy，留空 = 目前使用者）"
                         value={draft.ssh_user}
                         onChange={(e) => setDraft({ ...draft, ssh_user: e.target.value })}
                       />

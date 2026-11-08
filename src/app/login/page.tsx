@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [setupToken, setSetupToken] = useState("");
-  const [projectsRoot, setProjectsRoot] = useState("/var/docker-www/wp-proxy-sites");
+  const [projectsRoot, setProjectsRoot] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -95,7 +95,7 @@ export default function LoginPage() {
             value={password} onChange={(e) => setPassword(e.target.value)}
             autoComplete={isFirstUser ? "new-password" : "current-password"} />
           {isFirstUser && (
-            <input type="text" placeholder="Projects directory"
+            <input type="text" placeholder="Projects directory (e.g. /home/deploy/projects)"
               value={projectsRoot} onChange={(e) => setProjectsRoot(e.target.value)} required />
           )}
           <button type="submit" disabled={loading}>
