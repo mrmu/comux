@@ -57,5 +57,8 @@ ISSUES.md
 # 內部搬遷交接文件(含主機/IP/弱點,不進公開 repo)
 docs/migration/
 
+# 內部架構/規劃交接文件(含站點清單、會員規模、基礎設施,不進公開 repo)
+docs/planning/
+
 # next dev 殘留檔(已於 e876a2e 關閉自動產生),agent 說明統一用 CLAUDE.md
 AGENTS.md
