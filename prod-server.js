@@ -52,10 +52,12 @@ const {
   getCookieValue,
   WS_MAX_PAYLOAD,
 } = require("./server-shared/ws-guard");
+// 稽核：每條終端機連線、從終端機 SSH 出去的連線
+const { trackTerminal, startSessionAudit } = require("./server-shared/session-audit");
 
 // ─── PTY terminal handler ──────────────────────────────────────────
 
-function handleTerminal(ws, sessionName, windowIndex) {
+function handleTerminal(ws, sessionName, windowIndex, endAudit) {
   const pty = require("node-pty");
   // `=name` 精確比對（避免前綴比對到別的 session）
   const target = tmuxTarget(sessionName, windowIndex);
@@ -94,8 +96,12 @@ function handleTerminal(ws, sessionName, windowIndex) {
     } catch {}
   });
 
-  ws.on("close", () => ptyProcess.kill());
-  ws.on("error", () => ptyProcess.kill());
+  const cleanup = () => {
+    ptyProcess.kill();
+    endAudit();
+  };
+  ws.on("close", cleanup);
+  ws.on("error", cleanup);
 }
 
 // ─── Start ─────────────────────────────────────────────────────────
@@ -108,7 +114,11 @@ async function main() {
 
   // 可信來源位址：刪掉外部傳入的 x-comux-client-ip，改由 socket 位址
   // （或 TRUSTED_PROXIES 轉送的 X-Forwarded-For）決定，給登入限流用
-  const { applyClientIpHeader, markClientIpHeaderTrusted } = require("./server-shared/client-ip");
+  const {
+    applyClientIpHeader,
+    markClientIpHeaderTrusted,
+    resolveClientIp,
+  } = require("./server-shared/client-ip");
   markClientIpHeaderTrusted();
 
   const server = http.createServer((req, res) => {
@@ -147,9 +157,10 @@ async function main() {
         const parsed = parseTerminalPath(pathname);
         if (!parsed) return reject(socket, "400 Bad Request");
 
-        // Auth check（查 DB，所以是非同步）
+        // Auth check（查 DB，所以是非同步；只接受已通過第二道驗證的 session）
         const token = getCookieValue(request.headers.cookie, "comux_token");
-        if (!(await verifySessionToken(token))) return reject(socket, "401 Unauthorized");
+        const user = await verifySessionToken(token);
+        if (!user) return reject(socket, "401 Unauthorized");
 
         // 只能 attach comux 自己管理的 session（projects 表裡有的）
         if (!(await isManagedSession(parsed.sessionName))) return reject(socket, "404 Not Found");
@@ -158,7 +169,13 @@ async function main() {
         if (socket.destroyed) return;
 
         wss.handleUpgrade(request, socket, head, (ws) => {
-          handleTerminal(ws, parsed.sessionName, parsed.windowIndex);
+          const endAudit = trackTerminal(user, {
+            sessionName: parsed.sessionName,
+            windowIndex: parsed.windowIndex,
+            ip: resolveClientIp(request),
+            userAgent: request.headers["user-agent"] || "",
+          });
+          handleTerminal(ws, parsed.sessionName, parsed.windowIndex, endAudit);
         });
       } catch (err) {
         console.error("> terminal upgrade failed:", err && err.message);
@@ -182,6 +199,8 @@ async function main() {
 
   server.listen(currentPort, hostname, () => {
     console.log(`> comux ready on http://${hostname}:${currentPort}`);
+
+    startSessionAudit().catch((err) => console.error("> session audit failed to start:", err.message));
 
     // Auto-restore sessions from DB after server is ready
     setTimeout(async () => {

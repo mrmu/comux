@@ -8,6 +8,7 @@ import "dotenv/config";
 import { createServer } from "http";
 import { setupWebSocket } from "./ws-server";
 import { assertComuxSecretOrExit } from "./server-shared/comux-secret";
+import { startSessionAudit } from "./server-shared/session-audit";
 
 // 秘鑰不合格就拒絕啟動（本機開發也一樣，不再有預設值）
 assertComuxSecretOrExit("comux-ws-dev");
@@ -24,4 +25,6 @@ setupWebSocket(server);
 
 server.listen(port, host, () => {
   console.log(`> terminal WebSocket server on ws://${host}:${port}`);
+  // 開發時 SSH 監看跟著 WS 進程跑（正式機在 prod-server.js）
+  startSessionAudit().catch((err: Error) => console.error("> session audit failed to start:", err.message));
 });

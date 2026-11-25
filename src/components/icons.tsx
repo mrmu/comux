@@ -86,6 +86,15 @@ export function MachinesIcon({ size = 18 }: { size?: number }) {
   );
 }
 
+export function AuditIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg {...iconBase(size)}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <polyline points="9 12 11 14 15 10" />
+    </svg>
+  );
+}
+
 export function AccountIcon({ size = 18 }: { size?: number }) {
   return (
     <svg {...iconBase(size)}>

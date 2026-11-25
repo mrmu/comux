@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { registerFirstUser, COOKIE_NAME } from "@/lib/auth";
+import { registerFirstUser, setSessionCookie } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { setSetting } from "@/lib/settings";
 import { verifySetupToken, clearSetupToken } from "@/lib/setup-token";
@@ -55,13 +55,8 @@ export async function POST(request: NextRequest) {
     await setSetting("projectsRoot", body.projectsRoot);
   }
 
-  const isProduction = process.env.NODE_ENV === "production";
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(COOKIE_NAME, result.token, {
-    maxAge: 7 * 86400,
-    httpOnly: true,
-    sameSite: "strict",
-    secure: isProduction,
-  });
+  // 拿到的是暫時 session：下一步一定是綁定第二道驗證
+  const response = NextResponse.json({ ok: true, next: "enroll" });
+  setSessionCookie(response, result.token, true);
   return response;
 }

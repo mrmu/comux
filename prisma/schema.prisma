@@ -14,9 +14,39 @@ model User {
   name      String   @default("")
   // JWT 內帶這個版本號；改密碼、登出、刪除時遞增 → 舊 token 立即失效
   tokenVersion Int    @default(0) @map("token_version")
+  // 第二道驗證（TOTP）。秘鑰以 COMUX_SECRET 衍生的金鑰 AES-256-GCM 加密後存放。
+  // totpEnabledAt 為 null = 還沒綁定：登入後只能進綁定流程，綁好才拿得到完整 session。
+  totpSecret        String?   @map("totp_secret")
+  totpPendingSecret String?   @map("totp_pending_secret") // 綁定中、尚未確認的秘鑰
+  totpEnabledAt     DateTime? @map("totp_enabled_at")
+  totpLastStep      Int?      @map("totp_last_step")      // 最後一次用過的時間步，防止同一組碼重放
+  backupCodes       String[]  @default([]) @map("backup_codes") // 一次性備用碼的 SHA-256，用掉就移除
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("users")
+}
+
+// 稽核紀錄：登入（成功／失敗）、第二道驗證的變更、網頁終端機連線、從終端機 SSH 出去的連線。
+// 有持續時間的事件（terminal、ssh）在開始時建立、結束時補 endedAt／durationSec。
+// type: login_success / login_failed / mfa_failed / mfa_enabled / backup_codes_regenerated /
+//       backup_code_used / mfa_reset / terminal / ssh
+model AuditEvent {
+  id          Int       @id @default(autoincrement())
+  type        String
+  userId      Int?      @map("user_id")
+  email       String    @default("")
+  ip          String    @default("")
+  userAgent   String    @default("") @map("user_agent")
+  sessionName String    @default("") @map("session_name") // tmux session（terminal / ssh）
+  target      String    @default("")                       // ssh 目的地（user@host）
+  detail      Json      @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  endedAt     DateTime? @map("ended_at")
+  durationSec Int?      @map("duration_sec")
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@map("audit_events")
 }
 
 model Setting {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AccountIcon,
+  AuditIcon,
   CheckIcon,
   ChevronDownIcon,
   IssuesIcon,
@@ -12,7 +13,7 @@ import {
   ScansIcon,
 } from "./icons";
 
-export type SectionKey = "projects" | "issues" | "scans" | "machines" | "account";
+export type SectionKey = "projects" | "issues" | "scans" | "machines" | "audit" | "account";
 
 interface Section {
   key: SectionKey;
@@ -26,6 +27,7 @@ const SECTIONS: Section[] = [
   { key: "issues",   label: "Issues",   path: "/issues",   Icon: IssuesIcon },
   { key: "scans",    label: "Scans",    path: "/scans",    Icon: ScansIcon },
   { key: "machines", label: "Machines", path: "/machines", Icon: MachinesIcon },
+  { key: "audit",    label: "Audit",    path: "/audit",    Icon: AuditIcon },
   { key: "account",  label: "Account",  path: "/account",  Icon: AccountIcon },
 ];
 

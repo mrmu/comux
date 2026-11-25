@@ -7,16 +7,29 @@ function jwtKey(): Uint8Array {
   return new TextEncoder().encode(getComuxSecret());
 }
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/register", "/api/auth/check"];
+// /api/auth/mfa/* 與 logout 自己驗 session（接受只過了密碼的暫時 session），這裡放行
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/check",
+  "/api/auth/logout",
+  "/api/auth/mfa/",
+];
 
 /**
  * 這裡只驗簽章與欄位形狀（proxy 不查 DB）。tokenVersion 是否仍有效由 API 的
  * requireAuth 與 WebSocket 驗證查 DB 比對；沒有 tv 欄位的舊格式 token 直接擋掉。
+ * 只過了密碼（mfa !== true）的暫時 session 不算有效 → 頁面一律導回 /login 完成第二道驗證。
  */
 async function isValidToken(token: string): Promise<boolean> {
   try {
     const { payload } = await jwtVerify(token, jwtKey(), { algorithms: ["HS256"] });
-    return typeof payload.userId === "number" && typeof payload.tv === "number";
+    return (
+      typeof payload.userId === "number" &&
+      typeof payload.tv === "number" &&
+      payload.mfa === true
+    );
   } catch {
     return false;
   }

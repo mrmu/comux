@@ -20,6 +20,9 @@ import {
   getCookieValue,
   WS_MAX_PAYLOAD,
 } from "./server-shared/ws-guard";
+// 稽核：每條終端機連線（誰、哪個 session、多久）
+import { trackTerminal } from "./server-shared/session-audit";
+import { resolveClientIp } from "./server-shared/client-ip";
 
 // ─── Allowed origins ───────────────────────────────────────────────
 
@@ -61,9 +64,10 @@ export function setupWebSocket(server: HttpServer) {
         const parsed = parseTerminalPath(pathname);
         if (!parsed) return reject(socket, "400 Bad Request");
 
-        // Auth check（查 DB，所以是非同步）
+        // Auth check（查 DB，所以是非同步；只接受已通過第二道驗證的 session）
         const token = getCookieValue(request.headers.cookie, "comux_token");
-        if (!(await verifySessionToken(token))) return reject(socket, "401 Unauthorized");
+        const user = await verifySessionToken(token);
+        if (!user) return reject(socket, "401 Unauthorized");
 
         // 只能 attach comux 自己管理的 session（projects 表裡有的）
         if (!(await isManagedSession(parsed.sessionName))) return reject(socket, "404 Not Found");
@@ -72,7 +76,13 @@ export function setupWebSocket(server: HttpServer) {
         if (socket.destroyed) return;
 
         wss.handleUpgrade(request, socket, head, (ws) => {
-          handleTerminalConnection(ws, parsed.sessionName, parsed.windowIndex);
+          const endAudit = trackTerminal(user, {
+            sessionName: parsed.sessionName,
+            windowIndex: parsed.windowIndex,
+            ip: resolveClientIp(request),
+            userAgent: request.headers["user-agent"] || "",
+          });
+          handleTerminalConnection(ws, parsed.sessionName, parsed.windowIndex, endAudit);
         });
       } catch (err) {
         console.error("> terminal upgrade failed:", (err as Error).message);
@@ -83,7 +93,12 @@ export function setupWebSocket(server: HttpServer) {
   });
 }
 
-function handleTerminalConnection(ws: WebSocket, sessionName: string, windowIndex?: number) {
+function handleTerminalConnection(
+  ws: WebSocket,
+  sessionName: string,
+  windowIndex: number | undefined,
+  endAudit: () => void
+) {
   // `=name` 精確比對（避免前綴比對到別的 session）
   const target = tmuxTarget(sessionName, windowIndex);
 
@@ -159,6 +174,7 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
   const cleanup = () => {
     clearInterval(heartbeat);
     ptyProcess.kill();
+    endAudit();
   };
   ws.on("close", cleanup);
   ws.on("error", cleanup);
