@@ -99,6 +99,15 @@ ALLOWED_ORIGINS=your-host.your-tailnet.ts.net,localhost
 # Cloudflare (選用，DNS 管理功能才需要)
 CF_API_TOKEN=
 CF_ZONE_ID=
+
+# 安全事件通知（建議設定；登入、第二道驗證變更、SSH 連線）。兩種可以同時設：
+#   Telegram：跟 @BotFather 建 bot 拿 token，chat id 可傳一則訊息給 bot 後查 getUpdates
+# COMUX_TELEGRAM_BOT_TOKEN=
+# COMUX_TELEGRAM_CHAT_ID=
+#   通用 webhook：POST JSON {text, content}（Slack / Discord / Google Chat / 自架接收端）
+# COMUX_NOTIFY_WEBHOOK_URL=
+# 通知裡顯示的主機名稱（預設 os.hostname()）
+# COMUX_INSTANCE_NAME=
 EOF
 
 # 安裝依賴 + build
@@ -166,6 +175,36 @@ curl -I https://your-host.your-tailnet.ts.net
 註冊頁要填這個值。也可以在 `.env` 預先設 `COMUX_SETUP_TOKEN=<至少 16 字元的隨機值>`。
 第一個帳號建立後 token 立即作廢，之後的帳號只能由已登入的使用者在帳號頁新增。
 
+### 第二道驗證（TOTP）
+
+每個帳號登入都要「密碼＋驗證器 App 的 6 位數碼」。還沒綁定的帳號（包括剛建立的第一個
+admin、帳號頁新增的使用者）用密碼登入後會直接進入綁定畫面，綁好才能使用 comux，
+所以第一次部署不會把人鎖在外面。
+
+- 綁定時會給 10 組一次性備用碼，手機不在身邊時可代替驗證碼登入（每組只能用一次）。
+  到 Account 頁可以重新產生備用碼、換一支手機。
+- 手機和備用碼都遺失時，在主機上重設（清掉該帳號的驗證器，下次登入重新綁定）：
+
+  ```bash
+  cd ~/comux && npm run mfa:reset -- user@example.com
+  ```
+
+- TOTP 秘鑰以 `COMUX_SECRET` 衍生的金鑰加密存放。**更換 `COMUX_SECRET` 後所有人都要
+  重新綁定**（逐一 `npm run mfa:reset`）。
+
+### 稽核紀錄
+
+comux 的 **Audit** 頁可查：登入成功／失敗、第二道驗證的變更、每條網頁終端機連線
+（誰、哪個 session、多久），以及從終端機 SSH 出去的連線（誰、哪台、什麼時候、多久）。
+有設通知管道時，登入、驗證設定變更與互動式 SSH 會即時通知。
+
+SSH 是定期（預設 5 秒）掃 comux 這個 tmux server 底下的 `ssh` 行程得到的：
+- 只記目的地與「有沒有帶遠端指令」，不記指令內容（可能含密碼）。
+- 「誰」是當下開著那個 session 終端機的使用者；沒人開著時留空（多半是 agent 或背景程式）。
+- 幾秒內就結束的一次性指令（例如 `ssh host uptime`）可能掃不到。
+- `COMUX_NOTIFY_SSH=interactive`（預設，只通知互動式登入）/ `all` / `none`；
+  `COMUX_SSH_POLL_MS` 調整掃描間隔；`COMUX_SSH_AUDIT=off` 關閉 SSH 監看。
+
 ---
 
 ## 更新 comux
@@ -193,6 +232,13 @@ npm run db:deploy
 
 （`0_init` 等同 `db push` 時代的完整 schema；之後的 migration，例如
 `users.token_version`，才會實際執行。）
+
+### 升級到有第二道驗證的版本
+
+- 舊的登入 session 全部失效（JWT 多了 `mfa` 欄位），重啟後每個人要重新登入一次，
+  登入後會被要求綁定驗證器。**先確認手邊有手機和驗證器 App 再升級。**
+- 建議同時設定通知管道（上面 `.env` 的 `COMUX_TELEGRAM_*` 或 `COMUX_NOTIFY_WEBHOOK_URL`），
+  否則稽核只寫紀錄不通知。
 
 ## 常用 debug
 

@@ -85,6 +85,8 @@ npm start            # Local prod-mode smoke test (tsx server.ts) — 正式機�
 npm run db:migrate   # Dev: 改 schema 後建立新的 migration (prisma migrate dev)
 npm run db:deploy    # Prod: 套用 migration (prisma migrate deploy)
 npm run db:push      # 不建 migration 直接同步 schema（僅限丟棄式的本機 DB）
+npm test             # 單元測試（tests/*.test.ts，node:test + tsx）
+npm run mfa:reset -- <email>  # 重設某帳號的第二道驗證（手機與備用碼都遺失時）
 ```
 
 ## Project Structure
@@ -93,7 +95,8 @@ npm run db:push      # 不建 migration 直接同步 schema（僅限丟棄式的
 src/
   app/              # Next.js App Router
     api/            # REST API routes
-      auth/         # login, register, logout, password, users
+      auth/         # login, register, logout, password, users, mfa/*
+      audit/        # 稽核紀錄查詢
       sessions/     # CRUD, chat, chat-stream (SSE), files, hosts, windows
       dns/          # Cloudflare DNS management
       config/       # Frontend config (projectsRoot)
@@ -118,7 +121,10 @@ docs/deploy/        # Deployment guide
 
 ## DB Schema
 
-- **User**: email (unique), password (bcrypt), name, tokenVersion（JWT 的 `tv`；改密碼／登出／刪除時遞增讓舊 token 失效）
+- **User**: email (unique), password (bcrypt), name, tokenVersion（JWT 的 `tv`；改密碼／登出／刪除時遞增讓舊 token 失效）、
+  totpSecret／totpPendingSecret（以 COMUX_SECRET 衍生金鑰 AES-GCM 加密）、totpEnabledAt、totpLastStep（防重放）、backupCodes（SHA-256）
+- **AuditEvent**: 稽核紀錄 —— login_success / login_failed / mfa_failed / mfa_enabled / backup_codes_regenerated /
+  backup_code_used / mfa_reset / terminal / ssh；terminal、ssh 有 endedAt＋durationSec
 - **Setting**: key-value store (projectsRoot, etc.)
 - **Project**: name, displayName, color, cwd, command, jsonlSessionId
 - **Machine**: Tailscale 站點註冊表 — hostname (MagicDNS label, unique), sshUser, online, isSelf (comux 主開發機), source (tailscale/manual)。同步 (`tailscale status --json`) 只更新已納管站點＋self；tailnet 其他機器需在 Machines 頁勾選「納管」才會入庫（共用 tailnet 時避免公司 comux 看見個人站點）
@@ -134,7 +140,14 @@ docs/deploy/        # Deployment guide
   tmux target 用 `=name` 精確比對（server-shared/ws-guard.js，prod-server.js 與 ws-server.ts 共用）
 - CSRF（src/proxy.ts）：`/api/*` 非 GET 請求要求 `Sec-Fetch-Site: same-origin`（或同源 / ALLOWED_ORIGINS 的 `Origin`）
   且 `Content-Type: application/json`；需要非 JSON body 的 API 要加進 `NON_JSON_API_PATHS`
-- Login rate limit：來源位址 5 次/分（socket 位址；只有 TRUSTED_PROXIES 才採 X-Forwarded-For）＋ 帳號 15 分鐘失敗 10 次
+- Login rate limit：來源位址 10 次/分（密碼＋驗證碼都算；socket 位址，只有 TRUSTED_PROXIES 才採 X-Forwarded-For）
+  ＋ 帳號 15 分鐘失敗 10 次 ＋ 驗證碼每帳號 5 分鐘錯 5 次
+- 第二道驗證（TOTP＋10 組一次性備用碼，src/lib/totp.ts、mfa.ts）：密碼正確只發 10 分鐘的暫時 session
+  （JWT `mfa: false`），只能用 /api/auth/mfa/*、check、logout；proxy、requireAuth、WebSocket 都要求 `mfa: true`。
+  沒有 `mfa` 欄位的舊 token 一律無效。未綁定的帳號登入後強制綁定。遺失時 `npm run mfa:reset -- <email>`（主機上執行）
+- 稽核與通知（server-shared/audit.js、session-audit.js、notify.js）：登入、驗證設定變更、終端機連線、
+  從 tmux pane 掃到的 ssh 行程（只記目的地，不記指令內容）。通知走 Telegram 或通用 webhook（COMUX_TELEGRAM_* /
+  COMUX_NOTIFY_WEBHOOK_URL）；網頁 Audit 頁可查
 - 新設定的密碼至少 12 字元
 - Cookie: httpOnly + sameSite:strict + secure (prod)
 - Session 可撤銷：API 的 requireAuth 與 WebSocket 驗證都查 DB 比對 tokenVersion（proxy.ts 只驗簽章）

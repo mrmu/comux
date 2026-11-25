@@ -7,10 +7,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, name: true, createdAt: true },
+    select: { id: true, email: true, name: true, createdAt: true, totpEnabledAt: true },
     orderBy: { createdAt: "asc" },
   });
-  return NextResponse.json(users);
+  // 只回傳「有沒有綁定」，不外流任何秘鑰相關欄位
+  return NextResponse.json(
+    users.map(({ totpEnabledAt, ...u }) => ({ ...u, mfaEnabled: totpEnabledAt !== null }))
+  );
 }
 
 export async function POST(request: NextRequest) {

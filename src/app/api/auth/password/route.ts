@@ -3,10 +3,10 @@ import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import {
   MIN_PASSWORD_LENGTH,
-  COOKIE_NAME,
   getAuthenticatedUser,
   revokeUserSessions,
   issueToken,
+  setSessionCookie,
 } from "@/lib/auth";
 
 export async function PUT(request: NextRequest) {
@@ -39,13 +39,7 @@ export async function PUT(request: NextRequest) {
   const updated = await revokeUserSessions(userId);
   if (!updated) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  const isProduction = process.env.NODE_ENV === "production";
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(COOKIE_NAME, issueToken(updated), {
-    maxAge: 7 * 86400,
-    httpOnly: true,
-    sameSite: "strict",
-    secure: isProduction,
-  });
+  setSessionCookie(response, issueToken(updated), false);
   return response;
 }

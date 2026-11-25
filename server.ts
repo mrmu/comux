@@ -12,6 +12,7 @@ import next from "next";
 import { setupWebSocket } from "./ws-server";
 import { assertComuxSecretOrExit } from "./server-shared/comux-secret";
 import { applyClientIpHeader, markClientIpHeaderTrusted } from "./server-shared/client-ip";
+import { startSessionAudit } from "./server-shared/session-audit";
 
 // 秘鑰不合格（未設 / 太短 / 公開預設值）就拒絕啟動
 assertComuxSecretOrExit("comux");
@@ -37,5 +38,6 @@ app.prepare().then(() => {
 
   server.listen(port, hostname, () => {
     console.log(`> comux ready on http://${hostname}:${port}`);
+    startSessionAudit().catch((err: Error) => console.error("> session audit failed to start:", err.message));
   });
 });

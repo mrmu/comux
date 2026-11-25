@@ -4,54 +4,48 @@
  * WebSocket 的 upgrade 不經過 Next 的 route handler，所以要在這裡自己做跟
  * requireAuth 一樣的檢查：驗 JWT 簽章 → 查 DB 確認使用者還在且 tokenVersion 相符。
  *
- * 用 pg 直接查（而不是 Prisma client）：Prisma 產生的 client 是 TS，prod-server.js
- * 是不經編譯的純 JS 跑不了；兩個查詢都很單純，直接寫 SQL 即可。
- * 任何 DB 錯誤一律視為驗證失敗（fail-closed）。
+ * 用 pg 直接查（見 db-pool.js）。任何 DB 錯誤一律視為驗證失敗（fail-closed）。
+ * 只接受通過第二道驗證的 session（JWT 的 mfa === true）；只過了密碼那一關的
+ * 暫時 token 不能開終端機。
  */
 
 const jwt = require("jsonwebtoken");
 const { getComuxSecret } = require("./comux-secret");
-
-/** @type {import("pg").Pool | null} */
-let pool = null;
-
-function getPool() {
-  if (pool) return pool;
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error("DATABASE_URL environment variable is not set");
-  const { Pool } = require("pg");
-  pool = new Pool({ connectionString, max: 3, idleTimeoutMillis: 30_000 });
-  // 閒置連線斷掉時 pool 會 emit error，不處理會讓整個進程掛掉
-  pool.on("error", (err) => console.error("[comux-ws] pg pool error:", err.message));
-  return pool;
-}
+const { getPool } = require("./db-pool");
 
 /**
- * 驗證 comux_token：簽章、欄位形狀、DB 的 tokenVersion。
+ * 驗證 comux_token：簽章、欄位形狀、第二道驗證已完成、DB 的 tokenVersion。
+ * 通過回傳 { userId, email }（給稽核紀錄用），否則回 null。
  * @param {string | null | undefined} token
- * @returns {Promise<boolean>}
+ * @returns {Promise<{ userId: number, email: string } | null>}
  */
 async function verifySessionToken(token) {
-  if (!token) return false;
+  if (!token) return null;
   /** @type {any} */
   let payload;
   try {
     payload = jwt.verify(token, getComuxSecret(), { algorithms: ["HS256"] });
   } catch {
-    return false;
+    return null;
   }
-  if (!payload || typeof payload.userId !== "number" || typeof payload.tv !== "number") {
-    return false;
+  if (
+    !payload ||
+    typeof payload.userId !== "number" ||
+    typeof payload.tv !== "number" ||
+    payload.mfa !== true
+  ) {
+    return null;
   }
   try {
     const { rows } = await getPool().query(
-      "SELECT token_version FROM users WHERE id = $1",
+      "SELECT token_version, email FROM users WHERE id = $1",
       [payload.userId]
     );
-    return rows.length === 1 && rows[0].token_version === payload.tv;
+    if (rows.length !== 1 || rows[0].token_version !== payload.tv) return null;
+    return { userId: payload.userId, email: rows[0].email };
   } catch (err) {
     console.error("[comux-ws] token check failed:", /** @type {Error} */ (err).message);
-    return false;
+    return null;
   }
 }
 
